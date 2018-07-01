@@ -8,6 +8,8 @@ VIDEO_CONV_OPTS =
 {
   "hevc" => "-c:v libx264", #nothing, dest file as mp4 is enough
   "hevc (Main) yuv420p" => "-c:v libx264",
+  "hevc (Main 10) yuv420p10le" => "-c:v libx264",
+  "hevc (Main 10) yuv420p10le(tv)" => "-c:v libx264",
   "libx264 yuv420p" => "-c:v copy", # "copy", is faster
   "h264 (High 10) yuv420p10le" => "-c:v libx264",
   "h264 (High) yuv420p" => "-c:v copy", 
@@ -16,11 +18,12 @@ VIDEO_CONV_OPTS =
 
 AUDIO_CONV_OPTS =
 {
-  #"vorbis" => "-c:a:0 libmp3lame -b:a:0 320k", #convert to mp3
   "vorbis" => "-strict experimental -c:a:0 aac",
   "ac3" => "-c:a copy",
   "aac" => "-strict experimental -c:a copy",   #aac is desired, but apparently needs strict experimental. copy, not transcode
-  "mp3" => "-strict experimental -c:a:0 aac"
+  "aac (LC)" => "-strict experimental -c:a copy", 
+  "mp3" => "-strict experimental -c:a:0 aac",
+  "flac"=> "-strict experimental -c:a:0 aac"
 }
 
 SCREEN_HEIGHT      = 80
@@ -230,7 +233,7 @@ class Converter
     #determine if we need to convert to mp4
     
     #return File.basename(path).gsub(/(,|;|'|`)/,"").gsub(/^\[[^\]]*\]/,"").gsub(/\.mkv$/,".mp4").gsub(/^(_|\ )/, "")
-    return File.basename(path).gsub(/(,|;|'|`)/,"").gsub(/^\[[^\]]*\]/,"").gsub(/^(_|\ )/, "")
+    return File.basename(path).gsub(/(,|;|'|`)/,"").gsub(/^\[[^\]]*\]/,"").gsub(/^(_|\ )/, "").gsub(/^\./, "")
 
   end
 
@@ -241,7 +244,6 @@ class Converter
     file.status = "PROCESS"
     
     begin
-    
       #probe file
       file_info = probe_file(file.path)
   
@@ -254,17 +256,17 @@ class Converter
       #puts "video stream: #{file_info["video"][0]}"
   
       video_codec = get_video_codec(file_info)
-      raise "Could not determine video codec" unless video_codec
+      raise "Could not determine video codec from #{file_info}" unless video_codec
       
       #puts "Found video codec #{video_codec}"
       
       #check if we have to convert the video
       video_options = VIDEO_CONV_OPTS[video_codec]
-      raise "Could not determine video options from codec #{video_codec}" unless video_options
-      
+      raise "Could not determine video options from codec '#{video_codec}'" unless video_options
+            
       #get audio stream
       stream_number = get_audio_stream_number(file_info)
-      raise "Could not determine target audio stream number" unless stream_number
+      raise "Could not determine target audio stream number from #{ file_info["audio"] }" unless stream_number
       
       #puts "Using audio stream number #{stream_number}"
       audio_map ="-map 0:0 -map 0:#{stream_number}"
@@ -277,7 +279,7 @@ class Converter
   
       #check if we have to convert the audio
       audio_options = AUDIO_CONV_OPTS[audio_codec]
-      raise "Could not determine audio options from codec #{audio_codec}" unless audio_options
+      raise "Could not determine audio options from codec '#{audio_codec}'" unless audio_options
       
       #check if the file should already play. only convert it if necessary
       
@@ -311,6 +313,8 @@ class Converter
           while(!stdout.closed? && !stdin.closed?)
             #stdout.each { |line| puts "Got line: #{line}" }
           
+            sleep 10
+            
             #grab the next result            
             stdin.puts("\r")
               
@@ -326,13 +330,18 @@ class Converter
                   file.update_converted_frame_count(converted_frames)
                   file.update_framerate(framerate)
                 else
+                  #likely the first iteration
                   file.update_converted_frame_count(0)
                   file.update_framerate(0)
                 end
                 
                 #puts "found frameinfo #{result}\nconverted: #{converted_frames}/#{file.total_frame_count}\nrate: #{framerate}"
               end         
-            end           
+            end
+            
+            #sleep? the process is running, don't have to keep hammering it with /r
+            #make sure the right thing is sleeping           
+            
           end
         rescue Errno::EIO => e
           puts "Errno:EIO error, but this probably just means that the process has finished giving output #{e.message}"
@@ -368,7 +377,7 @@ class Converter
 
   def get_audio_stream_number(file_info)
 
-    #puts "audio stream: #{file_info["audio"][0]}"
+    puts "audio stream: #{file_info["audio"][0]}"
 
     #figure out audio stream of english track and map it to first audio stream of target
     #Stream #0.1(eng): Audio: aac, 44100 Hz, stereo, fltp (default)
@@ -382,6 +391,8 @@ class Converter
     return nil unless file_info["audio"][0]
     
     stream_number = file_info["audio"][0].split(" ")[0].split("\.")[1]
+      
+    return nil unless stream_number
       
     #remove any language string
     stream_number.gsub!(/(\(.*\))/, "")
