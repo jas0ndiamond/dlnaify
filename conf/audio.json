@@ -1,0 +1,9 @@
+
+
+{
+	"vorbis": "-strict experimental -c:a:0 aac",
+	"ac3": "-c:a copy",
+	"aac*": "-strict experimental -c:a:0 aac",
+	"mp3": "-strict experimental -c:a:0 aac",
+	"flac": "-strict experimental -c:a:0 aac"
+}

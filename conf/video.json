@@ -1,0 +1,12 @@
+{
+	"cpu": {
+		"hevc*": "libx264",
+		"libx264*": "copy",
+		"h264*": "copy",
+		"mpeg4*": ""
+	},
+	"gpu": {
+		"hevc*": "h264_nvenc"
+		
+	}
+}

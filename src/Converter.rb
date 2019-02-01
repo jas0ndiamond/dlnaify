@@ -1,30 +1,11 @@
 require_relative "MediaFile.rb"
+require_relative "MediaFileFactory.rb"
+require_relative "ConvertJobFactory.rb"
+require_relative 'MyLogger.rb'
+
 require 'pty'
 require 'expect'
 require 'curses'
-
-#target extension matters? go with mp4 for h264
-VIDEO_CONV_OPTS =
-{
-  "hevc" => "-c:v libx264", #nothing, dest file as mp4 is enough
-  "hevc (Main) yuv420p" => "-c:v libx264",
-  "hevc (Main 10) yuv420p10le" => "-c:v libx264",
-  "hevc (Main 10) yuv420p10le(tv)" => "-c:v libx264",
-  "libx264 yuv420p" => "-c:v copy", # "copy", is faster
-  "h264 (High 10) yuv420p10le" => "-c:v libx264",
-  "h264 (High) yuv420p" => "-c:v copy", 
-  "mpeg4 (Simple Profile) yuv420p" => ""
-}
-
-AUDIO_CONV_OPTS =
-{
-  "vorbis" => "-strict experimental -c:a:0 aac",
-  "ac3" => "-c:a copy",
-  "aac" => "-strict experimental -c:a copy",   #aac is desired, but apparently needs strict experimental. copy, not transcode
-  "aac (LC)" => "-strict experimental -c:a copy", 
-  "mp3" => "-strict experimental -c:a:0 aac",
-  "flac"=> "-strict experimental -c:a:0 aac"
-}
 
 SCREEN_HEIGHT      = 80
 SCREEN_WIDTH       = 130
@@ -36,15 +17,35 @@ MAIN_WINDOW_WIDTH  = SCREEN_WIDTH
 class Converter
 
   attr_accessor :all_files, :num_threads
-  def initialize(num_threads = 1, files_to_convert = nil )
+  def initialize(config, num_threads = 1, files_to_convert = nil )
+    @config = config
+    
     @queued_files = Queue.new
+    
     @all_files = Array.new
+    
+    @media_file_factory = MediaFileFactory.new(@config)
+    
+    @convert_job_factory = ConvertJobFactory.new(@config)
+    
+    #TODO: update this later on
+    #@pty_refresh = @config.get_pty_refresh
+    
+    #TODO: maybe do a sanity check on thread count here
+    #reconcile with cpu count if cpu transcode is going to happen
+    #num threads < num files
+    #num threads < 2x cpu core count
+    #num threads => 1 if gpu transcode
     @num_threads = num_threads
 
+    
+    MyLogger.instance.info("Converter", "Initialized with #{num_threads} threads")
+
+    
     if files_to_convert
-      files_to_convert.each do |file|
+      files_to_convert.each { |file|
         add_file(file)
-      end
+      }
     end
   end
 
@@ -52,23 +53,41 @@ class Converter
 
     dest = "." if dest == nil
 
-    new_file = MediaFile.new(path, dest)
+    new_file = @media_file_factory.build_media_file(path, dest)
       
-    #puts "Added file #{new_file.path}"
+    MyLogger.instance.info("Converter", "Added file #{new_file.path}")
     
-    @queued_files.push(new_file)
-    @all_files.push(new_file)
+    convertJob = @convert_job_factory.build_convert_job(new_file)
+    
+    @queued_files.push(convertJob)
+    @all_files.push(convertJob)
   end
 
   def run
 
+    MyLogger.instance.info("Converter", "Running conversion")
+
     workers = (@num_threads).times.map do
       Thread.new do
         while !@queued_files.empty?
-          #avconv convert
-          convert_file(@queued_files.pop)
 
+          #TODO: migrate to convertjob
+          #convert_file(@queued_files.pop)
+          
+          
+          
+          #MyLogger.instance.info("Converter", "Running conversion job for #{convertJob.media_file.path}")
+          
+          #convertJob.run
+
+          new_job = @queued_files.pop
+          
+          new_job.run
+          
+          
+          
         end
+        
       end
     end
     
@@ -94,8 +113,41 @@ class Converter
     
     window.setpos(MAIN_WINDOW_HEIGHT - 1, 0)
     
+    quit = false
+    
+    #catch 'q' to terminate conversion
+    quitThread = Thread.new do
+      #MyLogger.instance.info("Converter", "Starting quit listener")
+      
+      loop do
+        case Curses.getch
+        when "q"
+          quit = true
+          Curses.addstr("quitting")
+          
+          #puts "Quitting"
+          
+          #MyLogger.instance.info("Converter", "Aborting conversion triggered by user input")
+          
+          
+          break
+        end
+      end
+      
+      #MyLogger.instance.info("Converter", "Exiting quit listener")
+      
+      #puts "Exiting quit listener"
+      
+    end
+    
     #add thread to oversee file conversion status
     monitor = Thread.new do
+      
+      output = "Initializing..."
+      
+      window.clear
+      window << output
+      window.refresh
       
       done = Array.new
       failed = Array.new
@@ -103,11 +155,15 @@ class Converter
       process = Array.new
       unexpected = Array.new
       
-      sleep 5
+      #TODO: why are we sleeping here?
+      sleep 3
+      
+      window.clear
+      window.refresh
       
       begin
         #while all files are not done or failed
-        sleep 2
+        #sleep 2
         
         done.clear
         failed.clear
@@ -117,12 +173,20 @@ class Converter
         
         #puts "Starting status grab"
         
+        #in progress convertjobs
         @all_files.each { |file|
           
-          status = file.get_status
+          sleep 1
           
-          filename = File.basename(file.path)
+          #puts "Queued file: #{file.media_file.path}"
           
+          status = file.media_file.get_status
+          
+          #retrieve readablename from MediaFile
+          filename = File.basename(file.media_file.path)
+     
+          #puts "Status grab #{filename} => #{status}"
+               
           if(status == "QUEUED")
             queued.push("#{filename}...#{status}")
           elsif(status == "DONE")
@@ -131,22 +195,30 @@ class Converter
             failed.push("#{filename}...#{status}")   
           elsif(status == "PROCESS")
             
-            frame_count = file.get_converted_frame_count
+            #puts "stats start"
+            
+            frame_count = file.media_file.get_converted_frame_count
+            total_frame_count = file.media_file.get_total_frame_count
+            frame_rate = file.media_file.get_framerate
+            
+            #puts "stats end"
             
             #test/SampleVideo_1280x720_5mb2.mkv...^[[0m^[[0;33m[libx264/658 @ 0xf7c6a0]fps
             #test/SampleVideo_1280x720_5mb2.mkv...682/658 @ 23fps
 
+            #output << "found frame count: #{frame_count}\n"
+            #output << "found total frame count: #{total_frame_count}\n"
+            #output << "found frame rate: #{frame_rate}\n"
+            
             if(frame_count =~ /\d+/)
-              process.push("#{filename}...#{frame_count}/#{file.total_frame_count} @ #{file.get_framerate} fps")
+              
+              process.push("#{filename}...#{frame_count}/#{total_frame_count} @ #{frame_rate} fps")
             else
               process.push("#{filename}...PROCESSING")
             end
-            
-
           else
             unexpected.push("#{filename}: Unexpected file status: #{status}" )   
           end
-          
         } 
         
         #puts "finished status grab"
@@ -175,34 +247,65 @@ class Converter
           output << str << "\n"
         }
         
-        output << "#{Time.now}\n================================\n"
+        output << "#{Time.now}\n"
+        output << "Press 'q' to quit\n================================\n"
         
         #puts output
         window.clear
         window << output
         window.refresh
     
-      end until queued.size == 0 && process.size == 0
+      end until quit || (queued.size == 0 && process.size == 0)
+      
+
+
       
       window.close
       Curses.close_screen
 
-      #print status
+      if(quit)
+        #MyLogger.instance.info("Converter", "Conversion terminated. Cleaning up")
+        
+        #for each convertjob, terminate syscall
+        
+        puts "Conversion terminated. Cleaning up"
+        
+        #signal to the converter jobs to kill their respective ffmpeg syscalls
+        workers.map(&:cancel)
+        
+        workers.map(&:exit)
+        
+      else
+        #MyLogger.instance.info("Converter", "Conversion completed")
+      end
             
       done.clear
       failed.clear
       output = ""
       
+      #print the results of the conversion
       @all_files.each { |file|
         
-        status = file.get_status
-        filename = File.basename(file.path)
+        status = file.media_file.get_status
+        filename = File.basename(file.media_file.path)
         
-        if(status == "DONE")
-          done.push( "#{filename}...#{status}" )        
-        elsif(status == "FAILED")
+        if(status == "FAILED")
+          
+          #clean this up
+          
           failed.push( "#{filename}...#{status}\n==>#{file.message}\n==>#{file.syscall}" )
+        else
+          if(status != "DONE")
+            queued.push( "#{filename}...#{status}" )          
+          else
+            done.push( "#{filename}...#{status}" )          
+          end
         end   
+      }
+      
+      #if we got to all the jobs, this should be empty
+      queued.each { |str| 
+       output << str << "\n"
       }
       
       done.each { |str| 
@@ -219,244 +322,11 @@ class Converter
           
     end
 
-    workers.map(&:join)   
+    workers.map(&:join) 
+    
+    #TODO: need to join explicitly? pretty sure
+    quitThread.join  
+    
     monitor.join
   end
-
-  def get_dest_filename(path)
-    #remove odd chars
-
-    #remove preceding ^\[*\]
-
-    #puts "Found filename #{path}"
-
-    #determine if we need to convert to mp4
-    
-    #return File.basename(path).gsub(/(,|;|'|`)/,"").gsub(/^\[[^\]]*\]/,"").gsub(/\.mkv$/,".mp4").gsub(/^(_|\ )/, "")
-    return File.basename(path).gsub(/(,|;|'|`)/,"").gsub(/^\[[^\]]*\]/,"").gsub(/^(_|\ )/, "").gsub(/^\./, "")
-
-  end
-
-  def convert_file(file)
-
-    return if file == nil
-
-    file.status = "PROCESS"
-    
-    begin
-      #probe file
-      file_info = probe_file(file.path)
-  
-      #get video stream
-      #    Stream #0.0(eng): Video: h264 (High 10), yuv420p10le, 1280x720 [PAR 1:1 DAR 16:9], 23.98 fps, 1k tbn, 47.95 tbc (default)
-      #    Stream #0.0(jpn): Video: h264 (High 10), yuv420p10le, 1280x720 [PAR 1:1 DAR 16:9], 23.98 fps, 1k tbn, 47.95 tbc (default)
-      #    Stream #0.0: Video: hevc (Main), yuv420p, 1280x720, PAR 1:1 DAR 16:9, 23.98 fps, 1k tbn, 23.98 tbc (default)
-  
-      #determine video codec
-      #puts "video stream: #{file_info["video"][0]}"
-  
-      video_codec = get_video_codec(file_info)
-      raise "Could not determine video codec from #{file_info}" unless video_codec
-      
-      #puts "Found video codec #{video_codec}"
-      
-      #check if we have to convert the video
-      video_options = VIDEO_CONV_OPTS[video_codec]
-      raise "Could not determine video options from codec '#{video_codec}'" unless video_options
-            
-      #get audio stream
-      stream_number = get_audio_stream_number(file_info)
-      raise "Could not determine target audio stream number from #{ file_info["audio"] }" unless stream_number
-      
-      #puts "Using audio stream number #{stream_number}"
-      audio_map ="-map 0:0 -map 0:#{stream_number}"
-  
-      #get audio codec
-      audio_codec = get_audio_codec(file_info)
-      raise "Could not determine audio codec" unless audio_codec
-          
-      #puts "Found audio codec #{audio_codec}"
-  
-      #check if we have to convert the audio
-      audio_options = AUDIO_CONV_OPTS[audio_codec]
-      raise "Could not determine audio options from codec '#{audio_codec}'" unless audio_options
-      
-      #check if the file should already play. only convert it if necessary
-      
-      
-      target = "#{file.dest}/#{get_dest_filename(file.path)}"
-  
-      #verify parameters are defined
-  
-      #raise "Could not find suitable audio stream" unless
-  
-      syscall = "avconv -y -i \"#{file.path}\" #{audio_map} #{video_options} #{audio_options} \"#{target}\" 2>&1"
-      #puts syscall
-  
-      file.syscall = syscall
-      
-      #`#{syscall}'
-      
-      #continuously read from stdout to get current converted framecount and fps. possibly modify num_threads if fps breaks range
-      
-      PTY.spawn( syscall ) do |stdout, stdin, pid|
-        begin
-          
-          #puts "Waiting for ctrl-c prompt"
-          
-          stdout.expect(/Press ctrl-c to stop encoding/, 10) do
-            #nothing, skip the data avconv prints before starting conversion
-          end
-          
-          #puts "Waiting for 'frame=' Encoding started"
-          
-          while(!stdout.closed? && !stdin.closed?)
-            #stdout.each { |line| puts "Got line: #{line}" }
-          
-            sleep 10
-            
-            #grab the next result            
-            stdin.puts("\r")
-              
-            stdout.expect(/frame=/, 3) do |result|
-
-              #found frameinfo ["28946 fps=  2 q=28.0 size=  198817kB time=1205.20 bitrate=1351.4kbits/s    \r\e[0m\e[0;39mframe="]
-              if(result)
-                fields = result[0].split("\s")
-                converted_frames = fields[0]
-                framerate = fields[2]
-                
-                if(converted_frames =~ /\d+/)
-                  file.update_converted_frame_count(converted_frames)
-                  file.update_framerate(framerate)
-                else
-                  #likely the first iteration
-                  file.update_converted_frame_count(0)
-                  file.update_framerate(0)
-                end
-                
-                #puts "found frameinfo #{result}\nconverted: #{converted_frames}/#{file.total_frame_count}\nrate: #{framerate}"
-              end         
-            end
-            
-            #sleep? the process is running, don't have to keep hammering it with /r
-            #make sure the right thing is sleeping           
-            
-          end
-        rescue Errno::EIO => e
-          puts "Errno:EIO error, but this probably just means that the process has finished giving output #{e.message}"
-        rescue => e
-          
-          #file status to shit
-          file.status = "FAILED: #{e}"
-        ensure
-          Process.wait(pid)  
-        end 
-        
-      end
-    end
-
-    status = $?
-    
-    #update file status to done
-    if( status == 0 )
-      file.status = "DONE"
-    else
-      file.message = status
-      file.status = "FAILED"      
-    end
-    #puts "Exit code #{status}"
-    
-    #puts "Conversion exits with status #{status}"
-    
-  end
-
-  def get_audio_codec(file_info)
-    return file_info["audio"][0].split(" ")[2].gsub(/,/, "")
-  end
-
-  def get_audio_stream_number(file_info)
-
-    puts "audio stream: #{file_info["audio"][0]}"
-
-    #figure out audio stream of english track and map it to first audio stream of target
-    #Stream #0.1(eng): Audio: aac, 44100 Hz, stereo, fltp (default)
-    #Stream #0.2(jpn): Audio: aac, 48000 Hz, stereo, fltp
-    #Stream #0.3(eng): Subtitle: ass (default)
-    #Stream #0.1: Audio: aac, 48000 Hz, 5.1, fltp (default)
-        
-    
-    #0.1: Audio: aac, 48000 Hz, stereo, fltp (default)
-    
-    return nil unless file_info["audio"][0]
-    
-    stream_number = file_info["audio"][0].split(" ")[0].split("\.")[1]
-      
-    return nil unless stream_number
-      
-    #remove any language string
-    stream_number.gsub!(/(\(.*\))/, "")
-      
-    #remove trailing semicolon
-    stream_number.gsub!(/\:$/, "")
-      
-    return stream_number
-  end
-
-  def get_video_codec(file_info)
-
-    raise "Could not determine video codec" unless file_info["video"][0]
-    
-    #0.0: Video: h264 (High 10), yuv420p10le, 960x720 [PAR 1:1 DAR 4:3], 23.98 fps, 1k tbn, 47.95 tbc (default)
-    return file_info["video"][0].gsub(/^.*\ Video:\ /,"").split(",")[0..1].join("")
-  end
-
-  def probe_file(file)
-    results = Hash.new
-
-    if File.exists?(file)
-      #redirect stderr to stdout. avconv prints most everything to stderr
-      raw_info = `avconv -i \"#{file}\" 2>&1`
-
-      #interested in video stream and audio streams
-
-      i = 0
-      results["video"] = Array.new
-
-      #probably only want/going to get one video stream
-      raw_info.split("\n").grep(/^\s*Stream\ \#.*Video.*/).each { |vstream|
-        results["video"][i] = vstream.to_s.gsub(/^\s*Stream\ \#/, "")
-      }
-
-      results["audio"] = Array.new
-
-      #only match english stream
-      i = 0
-      raw_info.split("\n").grep(/^\s*Stream\ \#.*Audio.*/).each{ |astream|
-        
-        if astream.match(/.*(eng).*/)
-          results["audio"][i] = astream.to_s.gsub(/^\s*Stream\ \#/, "")
-          i+=1
-        end 
-      }
-
-      if(results["audio"].length == 0)       
-        i=0
-        #if no eng audio stream was found, match non-jpn/fra/esp prefixes
-        raw_info.split("\n").grep(/^\s*Stream\ \#.*Audio.*/).each{ |astream|
-          if !astream.match(/.*(jpn|fra|ita|esp|pol).*/)
-            results["audio"][i] = astream.to_s.gsub(/^\s*Stream\ \#/, "") 
-            i+=1
-          end
-        }
-
-      end
-    else
-      puts "Source file #{file} does not exist"
-    end
-
-    #return hash of video and audio stream info
-    return results
-  end
-
 end

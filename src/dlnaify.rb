@@ -3,11 +3,32 @@ require_relative 'Converter.rb'
 
 ####################################################
 
-FILE_FMTS = ["mkv", "mp4", "avi", "mpg", "m4v", "wmv"]
-  
+#unhardcode or make comprehensive
+#https://askubuntu.com/questions/844711/how-can-i-find-all-video-files-on-my-system
+#FILE_FMTS = ["mkv", "mp4", "avi", "mpg", "m4v", "wmv"]
+#skip ^^^. accept all files. if ffmpeg has a demuxer, read will succeed.
 
-#wrap avconv or ffmpeg
-#avconv for now
+#cli options  
+#--help print this block
+#-cfg config_file
+#-c convert
+#-i info
+#-f input of single file
+#-d input of directory tree contents
+#-p process pool size (require -c)
+#-t target dir (require -c)
+#-cpu cpu transcode (require -c)
+#-gpu gpu transcode (require -c)
+#-gpu_dev [0,1,2,...] (require -gpu)
+#-audio_fmt audio format as understood by ffmpeg (aac)
+#-video_fmt video format as understood by ffmpeg (h264)
+
+
+#defaults
+#-p 1
+#-cpu
+#-t ./
+
 
 # dlnaify.rb (-c or -i) (-f or -d) source [-t target_dir] 
 # dlnaify.rb -c -d /opt/derp => convert everything in /opt/derp with default options
@@ -17,13 +38,13 @@ FILE_FMTS = ["mkv", "mp4", "avi", "mpg", "m4v", "wmv"]
 # dlnaify.rb -i -f /opt/derp/derp2.mkv => display av info on target file
 # dlnaify.rb -i -d /opt/derp/ => display av info on target dir files
 
-#find avconv
-
 convert = false
 source_isdir = false
 target = nil
 
 num_threads = 1
+
+#confdir defaults to ./conf
 
 #convert or info?
 convert = true if ARGV.index("-c") != nil
@@ -34,31 +55,46 @@ source_isdir = true if ARGV.index("-d") != nil
 #use multiple threads?
 if(convert)
 
-  thread_param = ARGV.index("-p")
+  thread_flag = ARGV.index("-p")
   
-  if(thread_param != nil)
-    num_threads = ARGV[thread_param + 1].to_i
+  if(thread_flag != nil)
+    num_threads = ARGV[thread_flag + 1].to_i
   end
     
 end
 
-target_param = ARGV.index("-t")
+target_flag = ARGV.index("-t")
 
-if(target_param != nil)
-  target = ARGV[target_param + 1]
+if(target_flag != nil)
+  target = ARGV[target_flag + 1]
 end
 
-conv = Converter.new(num_threads)
+#enforce relative to binary
+#default at ./conf/
+config_file = nil
+config_flag = ARGV.index("-cfg")
 
-#abort("Both convert and info options specified. Choose one.") if convert  
+if(config_flag != nil)
+  config_file = ARGV[config_flag + 1]
+end
+
+
+
+config = Config.new(config_file)
+
+#set cli options
+
+#build the converter here. we will still need it for probes
+#TODO: no we don't/shouldn't. config should be sufficent
+conv = Converter.new(config, num_threads)
 
 if !convert
   
   if source_isdir
     # run find on dir
-    dir = ARGV[2]
+    dir = ARGV[3]
     
-    abort("Source dir does not exist") unless Dir.exists?(dir)
+    abort("Source dir #{dir} does not exist") unless dir and Dir.exists?(dir)
     
     Find.find(dir) { |file| 
       if(File.ftype(file) == "file" && FILE_FMTS[File.extname(file)] )  
@@ -81,7 +117,7 @@ if !convert
   else
     #get stream info for file
     file = ARGV[2]
-    abort("Source file does not exist") unless File.exists?(file)
+    abort("Source file does not exist") unless file and File.exists?(file)
     
     results = conv.probe_file(file)
     
@@ -104,13 +140,14 @@ else
   #convert file   
   if source_isdir
     # run find on dir
-    dir = ARGV[2]
+    dir = ARGV[4]
 
-    abort("Source dir does not exist") unless Dir.exists?(dir)
+    abort("Source dir #{dir} does not exist") unless dir and Dir.exists?(dir)
 
     #add mimetype check
     
     Find.find(dir) { |file| 
+      #TODO: remove mkv
       if(File.ftype(file) == "file" && File.extname(file) == ".mkv")         
         conv.add_file(file, target)
       end  
@@ -127,6 +164,8 @@ else
   
   
   #report any conversion result
+  
+  
 end
 
 
