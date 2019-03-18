@@ -1,8 +1,8 @@
 require 'pty'
 require 'expect'
 
-require_relative "MediaFile.rb"
-require_relative 'MyLogger.rb'
+require_relative "../media/MediaFile.rb"
+require_relative '../log/MyLogger.rb'
 
 class ConvertJob
   
@@ -48,8 +48,6 @@ class ConvertJob
     begin      
       #continuously read from stdout to get current converted framecount and fps. 
       
-      #TODO: possibly modify num_threads if fps breaks threshold
-      
       #puts "ConvertJob syscall: #{@syscall}"
       MyLogger.instance.info("ConvertJob", "ConvertJob syscall for #{@media_file.path}: #{@syscall}")
       
@@ -59,14 +57,6 @@ class ConvertJob
           @converter_pid = pid
           
           MyLogger.instance.info("ConvertJob", "Received pid #{@converter_pid} for conversion of #{@media_file.path}")
-          
-          #pid = thr[0].value
-          #puts "Got pid #{pid}"
-          
-          #TODO: updated ffmpeg seems to not have this
-          #stdout.expect(/Press ctrl-c to stop encoding/, 10) do
-            #nothing, skip the data ffmpeg prints before starting conversion
-          #end          
           
           #puts "=================================\nSyscall Read: #{stdout.read}"
           while(!stdout.closed?)
@@ -85,9 +75,7 @@ class ConvertJob
               if(result)
                 fields = result[0].split("\s")
                 converted_frames = fields[0]
-                
-                
-                
+
                 #get converted frame count from output
                 #if we can't get the frame count, probably not worth trying for other data
                 if(converted_frames =~ /\d+/)
@@ -102,126 +90,77 @@ class ConvertJob
                     framerate = fields[2]
                   elsif (fields[1] =~ /fps=\d/)
                     framerate = fields[1].gsub!("fps=", "")
+                  elsif (fields[1] == "fps=")
+                    framerate = fields[2] unless fields[2] !~ /\d+/
                   else
-                    #puts "Can't determine framerate"
+                    MyLogger.instance.warn("ConvertJob", "Ignoring bad framerate update '#{fields[1]}'")
                   end
                   
                   @media_file.update_framerate(framerate)
                   
                 else
                   #likely the first iterations
+                  
+                  MyLogger.instance.warn("ConvertJob", "Ignoring bad frame count update '#{converted_frames}'")
+                  
                   @media_file.update_converted_frame_count(0)
                   @media_file.update_framerate(0)
                 end
 
                 #puts "found frameinfo #{result}\nconverted: #{converted_frames}/#{@media_file.get_total_frame_count}\nrate: #{@media_file.get_framerate}"
              else
-             
+                MyLogger.instance.warn("ConvertJob", "Ignoring bad stdout update")
+
              end 
               
             }
-            
-            
-            
+
             #puts "after result"
           end
           
-          #puts "stdout of syscall closed"
-##################################
-# 
-#          puts "Waiting for 'frame=' Encoding started"
-#          
-#          while(!stdout.closed?)
-#            #TODO: need a non-blocking way to read stdout. otherwise the main thread locks up
-#              
-#            #TODO: why sleep here?
-#            sleep 4
-#            
-#            puts "stdout read"
-#            
-#            #stdout.each { |line| puts "Got line: #{line}" }
-#          
-#            #puts "stdout read done"
-#            
-#            #modern ffmpeg doesn't need this
-#            #grab the next result            
-#            #stdin.puts("\r")
-#              
-#
-#            result = stdout.read
-#            puts "Raw stdout gets: #{result}"
-#            puts "Processing pty result"
-#            
-#            stdout.expect(/^frame=/, 3) do |result|
-#
-#              #found frameinfo ["28946 fps=  2 q=28.0 size=  198817kB time=1205.20 bitrate=1351.4kbits/s    \r\e[0m\e[0;39mframe="]
-#              
-#              #found something new
-#              
-#              puts "frameinfo result #{result}"
-#              if(result)
-#                fields = result[0].split("\s")
-#                converted_frames = fields[0]
-#                framerate = fields[2]
-#                
-#                if(converted_frames =~ /\d+/)
-#                  @media_file.update_converted_frame_count(converted_frames)
-#                  @media_file.update_framerate(framerate)
-#                else
-#                  #likely the first iteration
-#                  @media_file.update_converted_frame_count(0)
-#                  @media_file.update_framerate(0)
-#                end
-#                
-#                puts "found frameinfo #{result}\nconverted: #{converted_frames}/#{@media_file.get_total_frame_count}\nrate: #{framerate}"
-#              end         
-#            end
-#            
-#            #sleep? the process is running, don't have to keep hammering it with /r
-#            #make sure the right thing is sleeping 
-#            #set interval in ConvertJobFactory  
-#            #sleep @checkup_sleep        
-#            
-#          end
-#          
-##################################
-          
-           
+          #puts "stdout of syscall closed" 
           
         rescue Errno::EIO => e
           MyLogger.instance.debug("ConvertJob", "Errno:EIO error, but this probably just means that the process has finished giving output #{e.message}")
         rescue => e
-
           MyLogger.instance.error("ConvertJob", "ConvertJob for #{@media_file.path} failed with #{e.message}")       
           #file status to shit
           @media_file.set_message("FAILED: #{e}")
         ensure
+          #if the thread that ConvertJob runs in is exited, this executes
+          
           #only wait if we haven't cancelled the job
           if (!@cancelled)
             MyLogger.instance.info("ConvertJob", "Waiting for pid: #{@converter_pid} to exit") 
           
             Process.wait(@converter_pid)
+          else
+            #cancelled so don't wait
           end
           
           MyLogger.instance.info("ConvertJob", "Pid: #{@converter_pid} has exited")
         end 
         
       }     
+
+    end
+
+    if(!@cancelled)
+      @exit_code = $?
+       
+      MyLogger.instance.info("ConvertJob", "Exit code: #{exit_code}")
       
+      #update file status to done
+      if( @exit_code == 0 )
+        @media_file.set_status("DONE")
+      else
+        @media_file.set_status("FAILED")      
+      end   
+    else
+      #if it's cancelled we don't care about the exit code
       
       
     end
-
-    @exit_code = $?
-     
-    MyLogger.instance.info("ConvertJob", "Exit code: #{exit_code}")
-    
-    #update file status to done
-    if( @exit_code == 0 )
-      @media_file.set_status("DONE")
-    else
-      @media_file.set_status("FAILED")      
-    end   
     
     MyLogger.instance.info("ConvertJob", "Conversion exits with status: #{@media_file.get_status}") 
   end

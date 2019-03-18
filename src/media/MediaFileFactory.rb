@@ -1,5 +1,5 @@
-require_relative 'VideoStream.rb'
-require_relative 'AudioStream.rb'
+require_relative '../stream/VideoStream.rb'
+require_relative '../stream/AudioStream.rb'
 
 #Create MediaFiles with context provided by Config
 class MediaFileFactory
@@ -20,6 +20,9 @@ class MediaFileFactory
     
     #determine if our ffmpeg can read the file format supplied
     
+    #sanitize path and dest. common fail case is an apostrophe
+    
+    
     #initialize
     media_file = MediaFile.new(path,dest, transcoder_probe(path))
     
@@ -38,9 +41,13 @@ class MediaFileFactory
     
     #set_subtitle_format(media_file)
     
+    #TODO: use config to set dest extension with target file extension
+    
     end_time = Time.now.to_f
     
     MyLogger.instance.info("MediaFileFactory", "MediaFile build took #{(end_time-start_time)} s")
+    
+    media_file.set_target_file_extension(@config.get_target_file_format)
     
     return media_file
   end
@@ -48,6 +55,8 @@ class MediaFileFactory
   def transcoder_probe(file)
     #this should be fast. shouldn't decode the file
     #this should also fail if ffprobe doesn't have a demuxer for the input file
+    #this function is is MediaFileFactory because it needs access to config and 
+    # the transcoder binary
     syscall = [
       @config.get_transcoder_probe_binary_location,
       "-v",
@@ -63,10 +72,14 @@ class MediaFileFactory
     #otherwise attempt to json-parse the output
     
     output = ""
-    Open3.popen3(syscall) {|stdin, stdout, stderr, wait_thr|
-    
-      raise "Could not open #{file} with transcoder. Unsupported file format?" unless
-        wait_thr.value == 0
+    Open3.popen3(syscall) {|stdin, stdout, stderr, wait_thr|        
+      if(wait_thr.value != 0)
+        
+        MyLogger.instance.error("MediaFileFactory", "Transcoder probe failed with syscall #{syscall}")
+
+        
+        raise "Could not open #{file} with transcoder. Unsupported file format?"
+      end
         
       output = stdout.read
     }
@@ -263,72 +276,4 @@ class MediaFileFactory
     
   end
   
-#  def set_total_frame_count(file)
-#    #ffprobe from config
-#    
-#    #don't make this a dealbreaker. 
-#    #transcode should happen even if we don't know the frame count
-#    #eventually the transcode will finish
-#    #at this point we should have verified that the source file is valid
-#    #raise "Could not determine frame count for file #{@path}" unless @total_frame_count
-#    #@total_frame_count = "???" unless @total_frame_count
-#    
-#    ########################
-#    
-#    #ffprobe: Query the container
-#    #ffprobe -v error -count_frames -select_streams v:0 -show_entries 
-#    #stream=nb_frames -of default=nokey=1:noprint_wrappers=1 input.mp4
-#
-#    MyLogger.instance.debug("MediaFileFactory", "Querying the container for the framecount")
-#    
-#    #check ffprobe output for nb_frames?
-#    #check ffprobe output for vid stream -> tags -> NUMBER_OF_FRAMES
-#    
-#    syscall = [
-#        @config.get_transcoder_probe_binary_location,
-#        "-v",
-#        "error",
-#        "-count_frames",
-#        "-select_streams",
-#        "v:0",
-#        "-show_entries",
-#        "stream=nb_frames",
-#        "-of",
-#        "default=nokey=1:noprint_wrappers=1",
-#        file.path
-#      ].join(" ")
-#          
-#    frame_count = `#{syscall}`.chomp.to_i
-#    
-#    if(!frame_count || frame_count == "N/A" || frame_count !~ /\d+/ || frame_count == 0)
-#      MyLogger.instance.debug("MediaFileFactory", "Could not determine frame count from container. Trying decode")
-#      
-#      #this will decode the file (slow!)
-#      #12G video -> 82min on a dualie cpu
-#      
-#      #ffprobe -v error -count_frames -select_streams v:0 -show_entries 
-#      # stream=nb_read_frames -of default=nokey=1:noprint_wrappers=1 file
-#      
-#      syscall = [
-#        @config.get_transcoder_probe_binary_location,
-#        "-v",
-#        "error",
-#        "-count_frames",
-#        "-select_streams",
-#        "v:0",
-#        "-show_entries",
-#        "stream=nb_read_frames",
-#        "-of",
-#        "default=nokey=1:noprint_wrappers=1",
-#        file.path
-#      ].join(" ")
-#          
-#      frame_count = `#{syscall}`.chomp.to_i
-#      MyLogger.instance.debug("MediaFileFactory", "Found frame count from decode: #{frame_count}")
-#    else
-#      MyLogger.instance.debug("MediaFileFactory", "Found frame count from container query: #{frame_count}")
-#    end
-#    
-#    file.set_total_frame_count(frame_count)
-#  end
 end

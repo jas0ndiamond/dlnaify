@@ -1,5 +1,5 @@
 require 'test/unit'
-require_relative "../src/Converter.rb"
+require_relative "../../src/convert/Converter.rb"
 
 #process and transcode our testfile
 #cleanup results

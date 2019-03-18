@@ -1,10 +1,10 @@
 require 'logger'
 require 'json'
 
-require_relative "../src/MyLogger.rb"
-require_relative "../src/exceptions/LangError.rb"
-require_relative "../src/exceptions/FormatError.rb"
-require_relative "../src/exceptions/ConfigError.rb"
+require_relative "../log/MyLogger.rb"
+require_relative "../exceptions/LangError.rb"
+require_relative "../exceptions/FormatError.rb"
+require_relative "../exceptions/ConfigError.rb"
 
 class Config
 
@@ -31,8 +31,6 @@ class Config
   TRANSCODER_NAME = "transcoder_name"
   TRANSCODER_BINARY_LOCATION = "transcoder_binary_location"
   TRANSCODER_PROBE_BINARY_LOCATION = "transcoder_probe_binary_location"
-  TRANSCODER_GPU_SYSCALL_PREFIX = "transcoder_gpu_syscall_prefix"
-  TRANSCODER_CPU_SYSCALL_PREFIX = "transcoder_cpu_syscall_prefix"
 
   SUPPORTED_ENCODERS = "supported_encoders"
   SUPPORTED_ENCODERS_VIDEO = "video"
@@ -110,7 +108,7 @@ class Config
   #-map 0:0 -map 0:1 my_out_file.mkv
 
   attr_accessor :config
-  def initialize(conf_file = "#{ File.dirname(__FILE__) }/../conf/dlnaify.conf" )
+  def initialize(conf_file = "#{ File.dirname(__FILE__) }/../../conf/dlnaify.conf" )
 
     raise ConfigError.new("Invalid config file") unless conf_file && File.exists?(conf_file)
     
@@ -225,6 +223,12 @@ class Config
     
   end
   
+  
+  
+  def load_convert_config(conf_file)
+    load_config(conf_file)
+  end
+  
   def load_config(conf_file)
     raise ConfigError.new("Need a defined config file") unless conf_file
     
@@ -246,8 +250,6 @@ class Config
           TRANSCODER_NAME => nil,  #required
           TRANSCODER_BINARY_LOCATION => nil, #required
           TRANSCODER_PROBE_BINARY_LOCATION => nil, #required
-          TRANSCODER_GPU_SYSCALL_PREFIX => nil, #optional
-          TRANSCODER_CPU_SYSCALL_PREFIX => nil, #optional
           SUPPORTED_ENCODERS => nil,
           SUPPORTED_DECODERS => nil,
           SUPPORTED_FILE_FORMATS => nil,
@@ -339,7 +341,7 @@ class Config
     if(!transcoder_binary_location)
       #whereis ffmpeg
       MyLogger.instance.debug("Config", "Transcoder binary directive undefined. Looking for ffmpeg")    
-      bin_location = `whereis -b ffmpeg`.split(/\ /)[1]
+      bin_location = `whereis -b ffmpeg`.split(/\s+/)[1]
   
       if( bin_location && File.exists?(bin_location))
         #overwrite the directive with what whereis found if it's viable
@@ -357,7 +359,7 @@ class Config
     if(!transcoder_probe_binary_location)
       #whereis ffprobe
       MyLogger.instance.debug("Config", "Transcoder probe binary directive undefined. Looking for ffprobe")
-      bin_location = `whereis -b ffprobe`.split(/\ /)[1]
+      bin_location = `whereis -b ffprobe`.split(/\s+/)[1]
 
       if( bin_location && File.exists?(bin_location))
         config[TRANSCODER_PROBE_BINARY_LOCATION] = bin_location
@@ -578,8 +580,6 @@ class Config
     return @config[SUPPORTED_FILE_EXTENSIONS]
   end
 
-
-  
   def get_audio_encoder_info(encoder)
     raise "Can't get info for invalid audio encoder #{encoder}" unless
       encoder and
@@ -978,10 +978,6 @@ class Config
       is_valid_target_lang(lang)
     
     @config[TARGET_LANG] = lang
-  end
-  
-  def set_target_file_extension(extension)
-    
   end
 
   def dump_config

@@ -1,5 +1,5 @@
 require 'test/unit'
-require_relative "../src/Config.rb"
+require_relative "../../src/config/Config.rb"
 
 class ConfigTest < Test::Unit::TestCase 
   
@@ -7,6 +7,12 @@ class ConfigTest < Test::Unit::TestCase
   
   def setup
     #puts "running setup ConfigTest"
+    
+    #get the test dir, which this file should be in
+    test_dir = File.expand_path(File.dirname(__FILE__))
+    
+    #setup tmpdir in resources
+    @conf_dir = File.expand_path("#{test_dir}/../resources/configs")
     
   end
 
@@ -29,7 +35,7 @@ class ConfigTest < Test::Unit::TestCase
   
   def test_specified_dir
     assert_nothing_thrown do
-      Config.new("../conf/dlnaify.conf")
+      Config.new("#{@conf_dir}/dlnaify.good.conf")
     end
   end
   
@@ -42,7 +48,7 @@ class ConfigTest < Test::Unit::TestCase
   def test_change_video_target_format
     
     assert_nothing_thrown do
-      c = Config.new("../conf/dlnaify.conf")
+      c = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
       format = "hevc"
       
@@ -60,21 +66,21 @@ class ConfigTest < Test::Unit::TestCase
     
     #unknown format
     assert_raise FormatError do
-      c = Config.new("../conf/dlnaify.conf")
+      c = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
       c.set_target_video_format("hevderpyderp")
     end
     
     #empty format
     assert_raise FormatError do
-      c = Config.new("../conf/dlnaify.conf")
+      c = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
       c.set_target_video_format("")
     end
     
     #known format, unknown transcode library
     assert_raise FormatError do
-      c = Config.new("../conf/dlnaify.conf")
+      c = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
       #Alias/Wavefront PIX image - not likely to be used in dlna operation
       c.set_target_video_format("alias_pix")
@@ -84,7 +90,7 @@ class ConfigTest < Test::Unit::TestCase
   def test_change_audio_target_format
     
     assert_nothing_thrown do
-      c = Config.new("../conf/dlnaify.conf")
+      c = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
       format = "ac3"
       c.set_target_audio_format(format)
@@ -101,21 +107,21 @@ class ConfigTest < Test::Unit::TestCase
     
     #unknown format
     assert_raise FormatError do
-      c = Config.new("../conf/dlnaify.conf")
+      c = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
       c.set_target_audio_format("hevderpyderp")
     end
     
     #empty format
     assert_raise FormatError do
-      c = Config.new("../conf/dlnaify.conf")
+      c = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
       c.set_target_audio_format("")
     end
     
     #known format, unknown transcode lib
     assert_raise FormatError do
-      c = Config.new("../conf/dlnaify.conf")
+      c = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
       #PCM unsigned 8-bit - not likely to be used in dlna operation
       c.set_target_audio_format("pcm_u8")
@@ -125,7 +131,7 @@ class ConfigTest < Test::Unit::TestCase
   
   def test_change_pixel_target_format
     assert_nothing_thrown do
-      c = Config.new("../conf/dlnaify.conf")
+      c = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
       format = "yuv420p"
       
@@ -141,7 +147,7 @@ class ConfigTest < Test::Unit::TestCase
     
     #unknown format
     assert_raise FormatError do
-      c = Config.new("../conf/dlnaify.conf")
+      c = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
       c.set_target_pixel_format("hevderpyderp")
     end
@@ -151,7 +157,7 @@ class ConfigTest < Test::Unit::TestCase
   def test_change_target_lang
     
     assert_nothing_thrown do
-      c = Config.new("../conf/dlnaify.conf")
+      c = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
       #Southern Altai - not on blacklist probably
       lang = "alt"
@@ -168,7 +174,7 @@ class ConfigTest < Test::Unit::TestCase
     
     #blacklisted lang
     assert_raise LangError do
-      c = Config.new("../conf/dlnaify.conf")
+      c = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
       c.set_target_lang("jpn")
     end

@@ -1,7 +1,7 @@
 require_relative "MediaFile.rb"
 require_relative "MediaFileFactory.rb"
-require_relative "ConvertJobFactory.rb"
-require_relative 'MyLogger.rb'
+require_relative "../convert/ConvertJobFactory.rb"
+require_relative '../log/MyLogger.rb'
 
 require 'pty'
 require 'expect'
@@ -67,14 +67,18 @@ class Converter
 
     MyLogger.instance.info("Converter", "Running conversion")
 
+    if @queued_files.empty?
+      
+      MyLogger.instance.warn("Converter", "Running conversion with 0 files added. Terminating Conversion.")
+
+      puts "\n\nConversion completed"
+      
+      return
+    end
+    
     workers = (@num_threads).times.map do
       Thread.new do
-        while !@queued_files.empty?
-
-          #TODO: migrate to convertjob
-          #convert_file(@queued_files.pop)
-          
-          
+        while !@queued_files.empty?          
           
           #MyLogger.instance.info("Converter", "Running conversion job for #{convertJob.media_file.path}")
           
@@ -109,6 +113,7 @@ class Converter
     window.scrollok(true)
     window.idlok(true)
     
+    #set our colors
     #window.color_set(1)
     
     window.setpos(MAIN_WINDOW_HEIGHT - 1, 0)
@@ -117,32 +122,24 @@ class Converter
     
     #catch 'q' to terminate conversion
     quitThread = Thread.new do
-      #MyLogger.instance.info("Converter", "Starting quit listener")
       
       loop do
         case Curses.getch
         when "q"
+          MyLogger.instance.info("Converter", "Aborting conversion triggered by user input")
+          
           quit = true
           Curses.addstr("quitting")
           
-          #puts "Quitting"
-          
-          #MyLogger.instance.info("Converter", "Aborting conversion triggered by user input")
-          
-          
           break
         end
-      end
-      
-      #MyLogger.instance.info("Converter", "Exiting quit listener")
-      
-      #puts "Exiting quit listener"
-      
+      end      
     end
     
     #add thread to oversee file conversion status
     monitor = Thread.new do
       
+      #TODO: this isn't always printed
       output = "Initializing..."
       
       window.clear
@@ -155,7 +152,7 @@ class Converter
       process = Array.new
       unexpected = Array.new
       
-      #TODO: why are we sleeping here?
+      #TODO: why are we sleeping here? giving ffmpeg a chance to spin up?
       sleep 3
       
       window.clear
@@ -169,6 +166,8 @@ class Converter
         failed.clear
         queued.clear
         process.clear
+        
+        #TODO: this is a stop gap until we get a better handle on status management
         unexpected.clear
         
         #puts "Starting status grab"
@@ -176,6 +175,7 @@ class Converter
         #in progress convertjobs
         @all_files.each { |file|
           
+          #TODO: why sleep here? to not hammer the cpu?
           sleep 1
           
           #puts "Queued file: #{file.media_file.path}"
@@ -196,6 +196,8 @@ class Converter
           elsif(status == "PROCESS")
             
             #puts "stats start"
+            
+            #TODO: possibly modify num_threads if fps breaks threshold
             
             frame_count = file.media_file.get_converted_frame_count
             total_frame_count = file.media_file.get_total_frame_count
@@ -250,16 +252,12 @@ class Converter
         output << "#{Time.now}\n"
         output << "Press 'q' to quit\n================================\n"
         
-        #puts output
         window.clear
         window << output
         window.refresh
     
       end until quit || (queued.size == 0 && process.size == 0)
-      
 
-
-      
       window.close
       Curses.close_screen
 
@@ -268,20 +266,26 @@ class Converter
         
         #for each convertjob, terminate syscall
         
-        puts "Conversion terminated. Cleaning up"
+        puts "Conversion terminated by user. Cleaning up"
+        MyLogger.instance.warn("Converter", "Conversion terminated by user. Cleaning up")
         
         #signal to the converter jobs to kill their respective ffmpeg syscalls
-        workers.map(&:cancel)
+        #TODO: kind of sloppy to just call cancel on all media_files and trust that 
+        #       it's handled correctly. maybe ConvertJob should subclass Thread 
+        @all_files.map(&:cancel)
         
         workers.map(&:exit)
         
       else
-        #MyLogger.instance.info("Converter", "Conversion completed")
+        MyLogger.instance.info("Converter", "Conversion completed")
       end
             
+      ##############
+      #conversion completed/terminated by this point
+      
       done.clear
       failed.clear
-      output = ""
+      report = ""
       
       #print the results of the conversion
       @all_files.each { |file|
@@ -295,36 +299,44 @@ class Converter
           
           failed.push( "#{filename}...#{status}\n==>#{file.message}\n==>#{file.syscall}" )
         else
-          if(status != "DONE")
-            queued.push( "#{filename}...#{status}" )          
-          else
+          if(status == "QUEUED")
+            #don't do anything, file is already in queued list          
+          elsif( status == "DONE" )
             done.push( "#{filename}...#{status}" )          
+          else
+            #anything that isn't queued or done is failed. namely processing/cancelled/failed
+            failed.push( "#{filename}...#{status}" )
           end
         end   
       }
       
+      report << "================================\nQUEUED:\n"
+      
       #if we got to all the jobs, this should be empty
       queued.each { |str| 
-       output << str << "\n"
+        report << str << "\n"
       }
+      
+      report << "================================\nDONE:\n"
       
       done.each { |str| 
-       output << str << "\n"
+        report << str << "\n"
       }
       
-      output << "================================\n"
+      report << "================================\nFAILED:\n"
       
       failed.each { |str| 
-       output << str << "\n"
+        report << str << "\n"
       }
+      report << "================================\n"
       
-      puts "#{output}\n\nConversion completed"
+      #print to stdout, since the curses window is closed earlier
+      puts "#{report}\n\nConversion completed"
           
     end
 
     workers.map(&:join) 
     
-    #TODO: need to join explicitly? pretty sure
     quitThread.join  
     
     monitor.join

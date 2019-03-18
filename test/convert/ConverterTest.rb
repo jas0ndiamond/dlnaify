@@ -1,8 +1,7 @@
 require 'test/unit'
-require_relative "../src/Converter.rb"
+require_relative "../../src/convert/Converter.rb"
 
-#basic converter operations. dry runs on transcodes.
-#look at resultant syscall
+#basic converter operations.
 
 class ConverterTest < Test::Unit::TestCase 
   
@@ -15,6 +14,9 @@ class ConverterTest < Test::Unit::TestCase
 
   def test_it_does_something_useful
     assert true
+  end
+  
+  def test_conversion_with_no_files
   end
   
   def teardown

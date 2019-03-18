@@ -1,10 +1,10 @@
 require 'test/unit'
 
-require_relative "../src/Config.rb"
-require_relative "../src/MediaFileFactory.rb"
-require_relative "../src/ConvertJobFactory.rb"
+require_relative "../../src/config/Config.rb"
+require_relative "../../src/media/MediaFileFactory.rb"
+require_relative "../../src/convert/ConvertJobFactory.rb"
 
-require_relative "FFmpegTestUtils.rb"
+require_relative "../FFmpegTestUtils.rb"
 
 #ConvertJobFactory assembles the underlying ffmpeg call.
 #make sure it doesn't suck
@@ -16,27 +16,34 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
   attr_accessor :config
   
   def setup  
+    
+    #get the test dir, which this file should be in
+    test_dir = File.expand_path(File.dirname(__FILE__))
+    
+    #setup tmpdir in resources
+    @conf_dir = File.expand_path("#{test_dir}/../resources/configs")
+    
     #create a config
     #need config to confirm test values
-    @config = Config.new("../conf/dlnaify.conf")
+    @config = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
     #paths to files
-    @simple_test_file = "./resources/SampleVideo_640x360_10mb.mkv"
+    @simple_test_file = "#{test_dir}/../resources/SampleVideo_640x360_10mb.mkv"
     
     #two audio streams, eng and spa, in order
-    @two_audio_streams_test_file = "./resources/SampleVideo_640x360_10mb_2_audio_streams.mkv"
+    @two_audio_streams_test_file = "#{test_dir}/../resources/SampleVideo_640x360_10mb_2_audio_streams.mkv"
     
     #two audio streams, spa and eng, in order    
-    @two_audio_streams_spa_first_test_file = "./resources/SampleVideo_640x360_10mb_2_audio_streams_spa_first.mkv"
+    @two_audio_streams_spa_first_test_file = "#{test_dir}/../resources/SampleVideo_640x360_10mb_2_audio_streams_spa_first.mkv"
     
     #blacklisted audio, no eng streams available
-    @blacklisted_audio_test_file = "resources/SampleVideo_640x360_10mb_2_audio_streams_pol_spa.mkv"
+    @blacklisted_audio_test_file = "#{test_dir}/../resources/SampleVideo_640x360_10mb_2_audio_streams_pol_spa.mkv"
     
     #unknown audio
-    @unknown_audio_test_file = "resources/SampleVideo_640x360_10mb_unknown_audio.mkv"
+    @unknown_audio_test_file = "#{test_dir}/../resources/SampleVideo_640x360_10mb_unknown_audio.mkv"
     
     #many langs, only 1 not on blacklist, no whitelisted langs
-    @non_blacklisted_audio_test_file = "resources/SampleVideo_640x360_10mb_non_blacklisted_audio.mkv"
+    @non_blacklisted_audio_test_file = "#{test_dir}/../resources/SampleVideo_640x360_10mb_non_blacklisted_audio.mkv"
     
     @ffmpeg_test_utils = FFmpegTestUtils.new(@config.get_transcoder_binary_location, @config.get_transcoder_probe_binary_location)  
     
@@ -60,10 +67,12 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     #/home/jason/FFmpeg/ffmpeg -y -i '/home/jason/dlnaify/test/resources/SampleVideo_640x360_10mb.mkv'  -c:v copy  -c:a copy  -map 0:0 -map 0:1 '/home/jason/dlnaify/test/SampleVideo_640x360_10mb.mkv'
     assert_equal(
       @config.get_transcoder_binary_location << 
+        " -v info -hide_banner" <<
         " -y -i" <<
         " '" << media_file.path << "' "<<
         "-c:v copy -c:a copy -map 0:0 -map 0:1 " <<
-        "'" << media_file.get_safe_dest_path << "'",
+        "'" << media_file.get_safe_dest_path << "'" <<
+        " 2>&1",
       job.syscall
     )
   end
@@ -80,10 +89,12 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     #/home/jason/FFmpeg/ffmpeg -y -i '/home/jason/dlnaify/test/resources/SampleVideo_640x360_10mb_2_audio_streams.mkv' -c:v copy -c:a copy -map 0:0 -map 0:1 '/home/jason/dlnaify/test/SampleVideo_640x360_10mb_2_audio_streams.mkv'
     assert_equal(
       @config.get_transcoder_binary_location << 
+        " -v info -hide_banner" <<
         " -y -i" <<
         " '" << media_file.path << "' "<<
         "-c:v copy -c:a copy -map 0:0 -map 0:1 " <<
-        "'" << media_file.get_safe_dest_path << "'",
+        "'" << media_file.get_safe_dest_path << "'" <<
+        " 2>&1",
       job.syscall
     )
   end
@@ -100,10 +111,12 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     #/home/jason/FFmpeg/ffmpeg -y -i '/home/jason/dlnaify/test/resources/SampleVideo_640x360_10mb_2_audio_streams_spa_first.mkv' -c:v copy -c:a copy -map 0:0 -map 0:2 '/home/jason/dlnaify/test/SampleVideo_640x360_10mb_2_audio_streams_spa_first.mkv'
     assert_equal(
       @config.get_transcoder_binary_location << 
+        " -v info -hide_banner" <<
         " -y -i" <<
         " '" << media_file.path << "' "<<
         "-c:v copy -c:a copy -map 0:0 -map 0:2 " <<
-        "'" << media_file.get_safe_dest_path << "'",
+        "'" << media_file.get_safe_dest_path << "'" <<
+        " 2>&1",
       job.syscall
     )
   end
@@ -112,7 +125,7 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     #test an actual transcode - where we convert to a new format
     
     #will need to set target in our own config object
-    myconfig = Config.new("../conf/dlnaify.conf")
+    myconfig = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
     #test file should be h264 so let's convert to hevc
     #encoder will be libx265
@@ -134,10 +147,12 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     #ffmpeg -y -i '/home/jason/dlnaify/test/resources/SampleVideo_640x360_10mb.mkv'  -c:v copy  -c:a copy  -map 0:0 -map 0:1 '/home/jason/dlnaify/test/SampleVideo_640x360_10mb.mkv'
     assert_equal(
       @config.get_transcoder_binary_location << 
+        " -v info -hide_banner" <<
         " -y -i" <<
         " '" << media_file.path << "' "<<
         "-c:v #{myconfig.get_target_video_encoder} -c:a copy -map 0:0 -map 0:1 " <<
-        "'" << media_file.get_safe_dest_path << "'",
+        "'" << media_file.get_safe_dest_path << "'" <<
+        " 2>&1",
       job.syscall
     )
   end
@@ -146,7 +161,7 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     #test an actual transcode - where we convert to a new format
     
     #will need to set target in our own config object
-    myconfig = Config.new("../conf/dlnaify.conf")
+    myconfig = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
     #avui is experimental
     myconfig.set_target_video_format("avui")
@@ -166,11 +181,13 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     #ffmpeg -y -i '/home/jason/dlnaify/test/resources/SampleVideo_640x360_10mb.mkv'  -c:v copy  -c:a copy  -map 0:0 -map 0:1 '/home/jason/dlnaify/test/SampleVideo_640x360_10mb.mkv'
     assert_equal(
       @config.get_transcoder_binary_location << 
+        " -v info -hide_banner" <<
         " -y -i" <<
         " '" << media_file.path << "' "<<
         "-strict -2 " << #avui
         "-c:v #{myconfig.get_target_video_encoder} -c:a copy -map 0:0 -map 0:1 " <<
-        "'" << media_file.get_safe_dest_path << "'",
+        "'" << media_file.get_safe_dest_path << "'" <<
+        " 2>&1",
       job.syscall
     )
   end
@@ -179,7 +196,7 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     #test an actual transcode - where we convert to a new format
     
     #will need to set target in our own config object
-    myconfig = Config.new("../conf/dlnaify.conf")
+    myconfig = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
     #test file should be h264 so let's convert to hevc
     #encoder will be libx265
@@ -202,12 +219,14 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     #ffmpeg -y -i '/home/jason/dlnaify/test/resources/SampleVideo_640x360_10mb.mkv'  -c:v copy  -c:a copy  -map 0:0 -map 0:1 '/home/jason/dlnaify/test/SampleVideo_640x360_10mb.mkv'
     assert_equal(
       @config.get_transcoder_binary_location << 
+        " -v info -hide_banner" <<
         " -y -i" <<
         " '" << media_file.path << "' "<<
         "-c:v #{myconfig.get_target_video_encoder} " <<
         "-pix_fmt gray " <<
         "-c:a copy -map 0:0 -map 0:1 " <<
-        "'" << media_file.get_safe_dest_path << "'",
+        "'" << media_file.get_safe_dest_path << "'" <<
+        " 2>&1",
       job.syscall
     )
   end
@@ -215,8 +234,10 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
   def test_copy_video_and_change_pixel_format
     #test an actual transcode - where we convert to a new format
     
+    #changing pixel format implies transcode. transcode to its current format
+    
     #will need to set target in our own config object
-    myconfig = Config.new("../conf/dlnaify.conf")
+    myconfig = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
     myconfig.set_target_pixel_format("gray")
     
@@ -233,12 +254,14 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     #ffmpeg -y -i '/home/jason/dlnaify/test/resources/SampleVideo_640x360_10mb.mkv'  -c:v copy  -c:a copy  -map 0:0 -map 0:1 '/home/jason/dlnaify/test/SampleVideo_640x360_10mb.mkv'
     assert_equal(
       @config.get_transcoder_binary_location << 
+        " -v info -hide_banner" <<
         " -y -i" <<
         " '" << media_file.path << "' "<<
-        "-c:v copy " <<
+        "-c:v libx264 " <<
         "-pix_fmt gray " <<
         "-c:a copy -map 0:0 -map 0:1 " <<
-        "'" << media_file.get_safe_dest_path << "'",
+        "'" << media_file.get_safe_dest_path << "'" <<
+        " 2>&1",
       job.syscall
     )
   end
@@ -247,7 +270,7 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     #test an actual transcode - where we convert to a new format
     
     #will need to set target in our own config object
-    myconfig = Config.new("../conf/dlnaify.conf")
+    myconfig = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
     #test file should be aac so let's convert to ac3
     #encoder will be ac3
@@ -269,11 +292,13 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     #ffmpeg -y -i '/home/jason/dlnaify/test/resources/SampleVideo_640x360_10mb.mkv'  -c:v copy  -c:a copy  -map 0:0 -map 0:1 '/home/jason/dlnaify/test/SampleVideo_640x360_10mb.mkv'
     assert_equal(
       @config.get_transcoder_binary_location << 
+        " -v info -hide_banner" <<
         " -y -i" <<
         " '" << media_file.path << "' "<<
         "-c:v copy "<<
         "-c:a #{myconfig.get_target_audio_encoder} -map 0:0 -map 0:1 " <<
-        "'" << media_file.get_safe_dest_path << "'",
+        "'" << media_file.get_safe_dest_path << "'" <<
+        " 2>&1",
       job.syscall
     )
   end
@@ -283,7 +308,7 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     #test an actual transcode - where we convert to a new format
     
     #will need to set target in our own config object
-    myconfig = Config.new("../conf/dlnaify.conf")
+    myconfig = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
     #test file should be h264 so let's convert to vorbis
     #encoder will be libvorbis
@@ -305,12 +330,14 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     #ffmpeg -y -i '/home/jason/dlnaify/test/resources/SampleVideo_640x360_10mb.mkv'  -c:v copy  -c:a copy  -map 0:0 -map 0:1 '/home/jason/dlnaify/test/SampleVideo_640x360_10mb.mkv'
     assert_equal(
       @config.get_transcoder_binary_location << 
+        " -v info -hide_banner" <<
         " -y -i" <<
         " '" << media_file.path << "' "<<
         "-c:v copy "<<
         "-strict -2 " << #libvorbis
         "-c:a #{myconfig.get_target_audio_encoder} -map 0:0 -map 0:1 " <<
-        "'" << media_file.get_safe_dest_path << "'",
+        "'" << media_file.get_safe_dest_path << "'" <<
+        " 2>&1",
       job.syscall
     )
   end
@@ -318,7 +345,7 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
   def test_transcode_audio_and_correct_lang_chosen
     
     #will need to set target in our own config object
-    myconfig = Config.new("../conf/dlnaify.conf")
+    myconfig = Config.new("#{@conf_dir}/dlnaify.good.conf")
     
     #test file should be h264 so let's convert to vorbis
     #encoder will be libvorbis
@@ -341,12 +368,14 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     #/home/jason/FFmpeg/ffmpeg -y -i '/home/jason/dlnaify/test/resources/SampleVideo_640x360_10mb_2_audio_streams_spa_first.mkv' -c:v copy -c:a copy -map 0:0 -map 0:2 '/home/jason/dlnaify/test/SampleVideo_640x360_10mb_2_audio_streams_spa_first.mkv'
     assert_equal(
       @config.get_transcoder_binary_location << 
+        " -v info -hide_banner" <<
         " -y -i" <<
         " '" << media_file.path << "' "<<
         "-c:v copy " << 
         "-strict -2 " << #libvorbis
         "-c:a #{myconfig.get_target_audio_encoder} -map 0:0 -map 0:2 " <<
-        "'" << media_file.get_safe_dest_path << "'",
+        "'" << media_file.get_safe_dest_path << "'" <<
+        " 2>&1",
       job.syscall
     )
   end
@@ -361,10 +390,12 @@ class ConvertJobFactoryTest < Test::Unit::TestCase
     
     assert_equal(
       @config.get_transcoder_binary_location << 
+        " -v info -hide_banner" <<
         " -y -i" <<
         " '" << media_file.path << "' "<<
         "-c:v copy -c:a copy -map 0:0 -map 0:1 " <<
-        "'" << media_file.get_safe_dest_path << "'",
+        "'" << media_file.get_safe_dest_path << "'" <<
+        " 2>&1",
       job.syscall
     )  
   end

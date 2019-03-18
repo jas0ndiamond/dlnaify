@@ -1,33 +1,38 @@
 require 'test/unit'
 
-require_relative "../src/MediaFileFactory.rb"
+require_relative "../../src/media/MediaFileFactory.rb"
 
 class MediaFileFactoryTest < Test::Unit::TestCase 
   
   attr_accessor :config 
   
   def setup 
-    @blacklisted_audio_test_file = "resources/SampleVideo_640x360_10mb_2_audio_streams_pol_spa.mkv"
-
-    @mostly_blacklisted_audio_test_file1 = "resources/SampleVideo_640x360_10mb_non_blacklisted_audio.mkv"
-    @mostly_blacklisted_audio_test_file2 = "resources/SampleVideo_640x360_10mb_non_blacklisted_audio_with_unknown.mkv"
     
-    @multiple_whitelisted_langs_test_file = "resources/SampleVideo_640x360_10mb_multi_whitelisted.mkv"
-    @multiple_unknown_langs_test_file = "resources/SampleVideo_640x360_10mb_multi_unknown.mkv"
+    #get the test dir, which this file should be in
+    test_dir = File.expand_path(File.dirname(__FILE__))
+    
+    @blacklisted_audio_test_file = "#{test_dir}/../resources/SampleVideo_640x360_10mb_2_audio_streams_pol_spa.mkv"
+
+    @mostly_blacklisted_audio_test_file1 = "#{test_dir}/../resources/SampleVideo_640x360_10mb_non_blacklisted_audio.mkv"
+    @mostly_blacklisted_audio_test_file2 = "#{test_dir}/../resources/SampleVideo_640x360_10mb_non_blacklisted_audio_with_unknown.mkv"
+    
+    @multiple_whitelisted_langs_test_file = "#{test_dir}/../resources/SampleVideo_640x360_10mb_multi_whitelisted.mkv"
+    @multiple_unknown_langs_test_file = "#{test_dir}/../resources/SampleVideo_640x360_10mb_multi_unknown.mkv"
     
     #setup tmpdir in resources
-    @tmp_dir = File.expand_path("./resources/tmp")
+    @tmp_dir = File.expand_path("#{test_dir}/../resources/tmp")
     Dir.mkdir(@tmp_dir)
     raise RuntimeError.new("Couldn't create tmp dir #{@tmp_dir} for testing") unless 
       File.exists?(@tmp_dir)
       
-    conf_file = "../conf/dlnaify.conf"
-    raise RuntimeError.new("Couldn't find config file at #{conf_file}") unless 
-      File.exists?(conf_file)
-      
-    @config = Config.new(conf_file)
+    #setup tmpdir in resources
+    @conf_dir = File.expand_path("#{test_dir}/../resources/configs")
     
-    @valid_file = "./resources/SampleVideo_640x360_10mb.mkv"
+    #create a config
+    #need config to confirm test values
+    @config = Config.new("#{@conf_dir}/dlnaify.good.conf")
+    
+    @valid_file = "#{test_dir}/../resources/SampleVideo_640x360_10mb.mkv"
     raise RuntimeError.new("Couldn't find valid file at #{@valid_file}") unless 
       File.exists?(@valid_file)
     

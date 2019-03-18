@@ -1,6 +1,6 @@
-require_relative 'Config.rb'
-require_relative 'ConvertJob.rb'
-require_relative 'MyLogger.rb'
+require_relative '../config/Config.rb'
+require_relative '../convert/ConvertJob.rb'
+require_relative '../log/MyLogger.rb'
 
 #assemble system call from media file and config
 class ConvertJobFactory
@@ -46,6 +46,8 @@ class ConvertJobFactory
     syscall.push("-hide_banner")
     syscall.push("-y")
     syscall.push("-i")
+    
+    #media_file.path is not safe 
     syscall.push("'#{media_file.path}'")
     
     target_video_format = @config.get_target_video_format
@@ -65,7 +67,14 @@ class ConvertJobFactory
     MyLogger.instance.info("ConvertJobFactory", "video target: #{target_video_format} vs current: #{media_file.get_video_stream.format}")
     MyLogger.instance.info("ConvertJobFactory", "video target: #{target_video_format} has encoder info: #{video_encoder_info}")
 
-    if(target_video_format == media_file.get_video_stream.format )
+    if
+    (
+      target_video_format == media_file.get_video_stream.format and
+      @config.get_target_pixel_format == media_file.get_video_stream.pixel_format 
+    )
+      #only copy if we're already in the target pixel fmt
+      #if we have a good video format but a bad pixel format, the result is unplayable
+      #-c:v copy may override -pix_fmt param
       MyLogger.instance.info("ConvertJobFactory", "Copying video format")
       #syscall << " -c:v copy "
       syscall.push("-c:v")
@@ -85,7 +94,6 @@ class ConvertJobFactory
     end
     
     #pixel format
-    #TODO: do we need to specify this? copy?
     #compare video stream pixfmt with target
     if(media_file.get_video_stream.pixel_format != @config.get_target_pixel_format)
       MyLogger.instance.info("ConvertJobFactory", "Changing pixel format to #{@config.get_target_pixel_format}")

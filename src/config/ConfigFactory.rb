@@ -21,4 +21,11 @@ class ConfigFactory
     #might be worth using this to determine if we can process the target 
     
   end
+  
+  def build_info_config
+    #encoders/decoders
+    #optional file target
+    #
+    #
+  end
 end

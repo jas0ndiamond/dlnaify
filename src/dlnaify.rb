@@ -1,5 +1,5 @@
 require 'find'
-require_relative 'Converter.rb'
+require_relative 'convert/Converter.rb'
 
 ####################################################
 
@@ -79,7 +79,7 @@ if(config_flag != nil)
 end
 
 
-
+#TODO: switch to config factory
 config = Config.new(config_file)
 
 #set cli options
@@ -147,8 +147,7 @@ else
     #add mimetype check
     
     Find.find(dir) { |file| 
-      #TODO: remove mkv
-      if(File.ftype(file) == "file" && File.extname(file) == ".mkv")         
+      if(File.ftype(file) == "file" )         
         conv.add_file(file, target)
       end  
     }

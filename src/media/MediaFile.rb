@@ -1,4 +1,4 @@
-require_relative 'MyLogger.rb'
+require_relative '../log/MyLogger.rb'
 
 require 'open3'
 
@@ -6,6 +6,7 @@ class MediaFile
   
   attr_accessor :path
   attr_accessor :dest
+  attr_accessor :target_file_extension
   attr_accessor :transcoder_probe_info
   attr_accessor :converted_frame_count
   attr_accessor :framerate
@@ -31,7 +32,7 @@ class MediaFile
       File.readable?(path)
     
     # @path needs to be escaped, since it's used in system calls later
-    #replace this with canonical path
+    #TODO: replace this with canonical path
     #don't use safe path
     @path = File.realpath(path) #File.path(path).gsub(/\"/, "\\\"" )
       
@@ -52,11 +53,22 @@ class MediaFile
     @video_stream = nil    
     @audio_stream = nil
     
+    @target_file_extension = nil
+    
     @transcoder_probe_info = transcoder_probe_info
     
     update_converted_frame_count(0)
     update_framerate(0)
     set_status("QUEUED")
+  end
+  
+  def set_target_file_extension(extension)
+    
+    MyLogger.instance.debug("MediaFile", "Setting target file extension to #{extension}")
+    
+    Mutex.new.synchronize do
+      @target_file_extension = extension
+    end
   end
   
   def update_converted_frame_count(count)
@@ -154,6 +166,16 @@ class MediaFile
     end
   end
   
+  def get_safe_path
+    #path isn't safe, make it safe
+    
+    
+    
+    MyLogger.instance.debug("MediaFile", "get_safe_path returning #{result}")
+    
+    return result
+  end
+  
   def get_safe_dest_path
     
     #safe dest for this file is determined by the @dest dir and 
@@ -161,10 +183,10 @@ class MediaFile
     #both need to be cleaned
     
     #expand file into full path
-    my_dest = File.realpath(@dest)
+    target_dest = File.realpath(@dest)
     
     #get and clean source filename
-    my_filename = File.basename(@path).
+    target_filename = File.basename(@path).
       gsub(/(,|;|'|`|")/,"").
       gsub(/^\[[^\]]*\]/,""). 
       gsub(/^\([^\]]*\)/,""). 
@@ -184,8 +206,24 @@ class MediaFile
     #last step is remove preceding '.' do not want to create hidden files
     
     #puts "Found filename #{path}"
+      
+    if(@target_file_extension != nil)
+      
+      MyLogger.instance.info("MediaFile", "get_safe_dest_path using target file extension #{@target_file_extension}")
 
-    result = "#{my_dest}/#{my_filename}"
+      #many media files are 3-4 char extensions
+      #remove the current extension if it's there 
+      target_filename.gsub!(/\.....?$/, "")
+        
+      #append the target extension
+      target_filename = target_filename << "." << @target_file_extension
+
+    else
+      MyLogger.instance.info("MediaFile", "target file extension not specified, leaving unchanged")
+    end
+
+    result = "#{target_dest}/#{target_filename}"
+    
     
     MyLogger.instance.debug("MediaFile", "get_safe_dest_path returning #{result}")
     

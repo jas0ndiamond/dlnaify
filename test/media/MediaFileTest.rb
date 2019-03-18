@@ -1,7 +1,7 @@
 require 'test/unit'
 require 'logger'
 
-require_relative "../src/MediaFile.rb"
+require_relative "../../src/media/MediaFile.rb"
 
 class MediaFileTest < Test::Unit::TestCase 
   
@@ -11,8 +11,11 @@ class MediaFileTest < Test::Unit::TestCase
     #puts "running setup MediaFileTest"
     #@instance = MediaFile.new("", "")
     
+    #get the test dir, which this file should be in
+    test_dir = File.expand_path(File.dirname(__FILE__))
+    
     #setup tmpdir in resources
-    @tmp_dir = File.expand_path("./resources/tmp")
+    @tmp_dir = File.expand_path("#{test_dir}/../resources/tmp")
     Dir.mkdir(@tmp_dir)
     raise RuntimeError.new("Couldn't create tmp dir #{@tmp_dir} for testing") unless 
       File.exists?(@tmp_dir)
@@ -99,7 +102,13 @@ class MediaFileTest < Test::Unit::TestCase
 
         #assert mediaFile.path.end_with?("/resources/testfile.mkv")
         #assert mediaFile.dest == "/dev/null"
+        
+        #check source
+        assert_true( File.exists?(mediaFile.path))
+        
+        #check dest
         assert_equal( "#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path) 
+        assert_equal( @tmp_dir, mediaFile.dest)
 
       ensure
         File.unlink(testfile) unless !File.exists?(testfile)
@@ -173,6 +182,11 @@ class MediaFileTest < Test::Unit::TestCase
         mediaFile = MediaFile.new( testfile, @tmp_dir )
         #puts mediaFile.path
         #puts mediaFile.dest
+        
+        #check source
+        assert_true( File.exists?(mediaFile.path))
+        
+        #check dest
         assert_equal( "#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
         assert_equal( @tmp_dir, mediaFile.dest)
 
@@ -195,6 +209,92 @@ class MediaFileTest < Test::Unit::TestCase
         mediaFile = MediaFile.new( testfile, @tmp_dir )
         #puts mediaFile.path
         #puts mediaFile.dest
+        
+        #check source
+        assert_true( File.exists?(mediaFile.path))
+        
+        #check dest
+        assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
+        assert_equal(@tmp_dir, mediaFile.dest )
+
+      ensure
+        File.unlink(testfile) unless !File.exists?(testfile)
+        handle.close unless !handle
+      end
+    end
+  end
+  
+  def test_mp4_source_extension_change
+    assert_nothing_thrown do
+      testfile = "#{@tmp_dir}/testfile.mp4"
+      target_ext = "mkv"
+      
+      begin
+        handle = File.new(testfile, "w")
+
+        raise RuntimeError.new("Could not create testfile") unless File.exists?(testfile)
+
+        mediaFile = MediaFile.new( testfile, @tmp_dir )
+        mediaFile.set_target_file_extension(target_ext)
+        
+        #check source
+        assert_true( File.exists?(mediaFile.path))
+        
+        #check dest
+        assert_equal("#{@tmp_dir}/testfile." << target_ext, mediaFile.get_safe_dest_path )
+        assert_equal(@tmp_dir, mediaFile.dest )
+
+      ensure
+        File.unlink(testfile) unless !File.exists?(testfile)
+        handle.close unless !handle
+      end
+    end
+  end
+  
+  def test_no_extension
+    assert_nothing_thrown do
+      testfile = "#{@tmp_dir}/testfile_definitely_no_extension_here"
+      target_ext = "mkv"
+      
+      begin
+        handle = File.new(testfile, "w")
+
+        raise RuntimeError.new("Could not create testfile") unless File.exists?(testfile)
+
+        mediaFile = MediaFile.new( testfile, @tmp_dir )
+        mediaFile.set_target_file_extension(target_ext)
+        
+        #check source
+        assert_true( File.exists?(mediaFile.path))
+        
+        #check dest
+        assert_equal("#{@tmp_dir}/testfile_definitely_no_extension_here." << target_ext, mediaFile.get_safe_dest_path )
+        assert_equal(@tmp_dir, mediaFile.dest )
+
+      ensure
+        File.unlink(testfile) unless !File.exists?(testfile)
+        handle.close unless !handle
+      end
+    end
+  end
+  
+  def test_source_with_apostrophe
+    assert_nothing_thrown do
+      testfile = "#{@tmp_dir}/test'file.mkv"
+      
+      begin
+        handle = File.new(testfile, "w")
+
+        raise RuntimeError.new("Could not create testfile") unless File.exists?(testfile)
+
+        mediaFile = MediaFile.new( testfile, @tmp_dir )
+        #puts mediaFile.path
+        #puts mediaFile.dest
+        
+        #check source
+        assert_true( File.exists?(mediaFile.path))
+        
+        #check dest
         assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
         assert_equal(@tmp_dir, mediaFile.dest )
 
@@ -217,6 +317,38 @@ class MediaFileTest < Test::Unit::TestCase
         mediaFile = MediaFile.new( testfile, @tmp_dir )
         #puts mediaFile.path
         #puts mediaFile.dest
+        
+        #check source
+        assert_true( File.exists?(mediaFile.path))
+        
+        #check dest
+        assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
+        assert_equal(@tmp_dir, mediaFile.dest )
+
+      ensure
+        File.unlink(testfile) unless !File.exists?(testfile)
+        handle.close unless !handle
+      end
+    end
+  end
+  
+  def test_source_with_apostrophes2
+    assert_nothing_thrown do
+      testfile = "#{@tmp_dir}/test''file.mkv"
+      
+      begin
+        handle = File.new(testfile, "w")
+
+        raise RuntimeError.new("Could not create testfile") unless File.exists?(testfile)
+
+        mediaFile = MediaFile.new( testfile, @tmp_dir )
+        #puts mediaFile.path
+        #puts mediaFile.dest
+        
+        #check source
+        assert_true( File.exists?(mediaFile.path))
+        
+        #check dest
         assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
         assert_equal(@tmp_dir, mediaFile.dest )
 
@@ -239,6 +371,11 @@ class MediaFileTest < Test::Unit::TestCase
         mediaFile = MediaFile.new( testfile, @tmp_dir )
         #puts mediaFile.path
         #puts mediaFile.dest
+        
+        #check source
+        assert_true( File.exists?(mediaFile.path))
+        
+        #check dest
         assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
         assert_equal(@tmp_dir, mediaFile.dest )
 
@@ -261,6 +398,11 @@ class MediaFileTest < Test::Unit::TestCase
         mediaFile = MediaFile.new( testfile, @tmp_dir )
         #puts mediaFile.path
         #puts mediaFile.dest
+        
+        #check source
+        assert_true( File.exists?(mediaFile.path))
+        
+        #check dest
         assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
         assert_equal(@tmp_dir, mediaFile.dest )
 
@@ -283,6 +425,11 @@ class MediaFileTest < Test::Unit::TestCase
         mediaFile = MediaFile.new( testfile, @tmp_dir )
         #puts mediaFile.path
         #puts mediaFile.dest
+        
+        #check source
+        assert_true( File.exists?(mediaFile.path))
+        
+        #check dest
         assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
         assert_equal(@tmp_dir, mediaFile.dest )
 
@@ -305,6 +452,11 @@ class MediaFileTest < Test::Unit::TestCase
         mediaFile = MediaFile.new( testfile, @tmp_dir )
         #puts mediaFile.path
         #puts mediaFile.dest
+        
+        #check source
+        assert_true( File.exists?(mediaFile.path))
+        
+        #check dest
         assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
         assert_equal(@tmp_dir, mediaFile.dest )
 
