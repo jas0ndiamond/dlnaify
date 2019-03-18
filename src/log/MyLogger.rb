@@ -3,7 +3,7 @@ require 'logger'
 class MyLogger
   
   def initialize
-    logdir = "#{ File.dirname(__FILE__) }/../log"
+    logdir = "#{ File.dirname(__FILE__) }/../../log"
     
     Dir.mkdir(logdir) unless File.exists?(logdir)
     
