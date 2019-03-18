@@ -1,5 +1,5 @@
-require_relative "MediaFile.rb"
-require_relative "MediaFileFactory.rb"
+require_relative "../media/MediaFile.rb"
+require_relative "../media/MediaFileFactory.rb"
 require_relative "../convert/ConvertJobFactory.rb"
 require_relative '../log/MyLogger.rb'
 
