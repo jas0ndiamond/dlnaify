@@ -1,7 +1,7 @@
-require_relative "../media/MediaFile.rb"
-require_relative "../media/MediaFileFactory.rb"
-require_relative "../convert/ConvertJobFactory.rb"
-require_relative '../log/MyLogger.rb'
+require_relative "MediaFile.rb"
+require_relative "MediaFileFactory.rb"
+require_relative "ConvertJobFactory.rb"
+require_relative 'MyLogger.rb'
 
 require 'pty'
 require 'expect'
@@ -34,8 +34,8 @@ class Converter
     #TODO: maybe do a sanity check on thread count here
     #reconcile with cpu count if cpu transcode is going to happen
     #num threads < num files
-    #num threads < 1x or 2x cpu core count
-    #num threads == gpu device pool size if gpu transcode
+    #num threads < 2x cpu core count
+    #num threads => 1 if gpu transcode
     @num_threads = num_threads
 
     

@@ -1,10 +1,10 @@
 require 'logger'
 require 'json'
 
-require_relative "../log/MyLogger.rb"
-require_relative "../exceptions/LangError.rb"
-require_relative "../exceptions/FormatError.rb"
-require_relative "../exceptions/ConfigError.rb"
+require_relative "../src/MyLogger.rb"
+require_relative "../src/exceptions/LangError.rb"
+require_relative "../src/exceptions/FormatError.rb"
+require_relative "../src/exceptions/ConfigError.rb"
 
 class Config
 
@@ -31,6 +31,8 @@ class Config
   TRANSCODER_NAME = "transcoder_name"
   TRANSCODER_BINARY_LOCATION = "transcoder_binary_location"
   TRANSCODER_PROBE_BINARY_LOCATION = "transcoder_probe_binary_location"
+  TRANSCODER_GPU_SYSCALL_PREFIX = "transcoder_gpu_syscall_prefix"
+  TRANSCODER_CPU_SYSCALL_PREFIX = "transcoder_cpu_syscall_prefix"
 
   SUPPORTED_ENCODERS = "supported_encoders"
   SUPPORTED_ENCODERS_VIDEO = "video"
@@ -49,10 +51,8 @@ class Config
   
   TRANSCODE_TARGETS = "transcode_targets"
   
-  DEFAULT_CONFIG_FILE = "#{ File.dirname(__FILE__) }/../../conf/dlnaify.conf"
-  
   ###################
-  #TODO: get rid of these, resolve lib from format name properly
+  #get rid of these, resolve lib from format name properly
   
   VIDEO_TRANSCODE_ENCODERS_CPU = {
     "h264" => "libx264",
@@ -109,12 +109,9 @@ class Config
   #-i ../my_in_file.mkv -c:v h264_nvenc -pix_fmt yuv420p -c:a copy
   #-map 0:0 -map 0:1 my_out_file.mkv
 
-  attr_accessor :config, :use_gpu_for_transcode
-  def initialize(conf_file = DEFAULT_CONFIG_FILE )
+  attr_accessor :config
+  def initialize(conf_file = "#{ File.dirname(__FILE__) }/../conf/dlnaify.conf" )
 
-    #if we have a default we might as well accept nil as a param
-    conf_file = DEFAULT_CONFIG_FILE unless conf_file
-    
     raise ConfigError.new("Invalid config file") unless conf_file && File.exists?(conf_file)
     
     #read dlnaify.conf in dir
@@ -255,6 +252,8 @@ class Config
           TRANSCODER_NAME => nil,  #required
           TRANSCODER_BINARY_LOCATION => nil, #required
           TRANSCODER_PROBE_BINARY_LOCATION => nil, #required
+          TRANSCODER_GPU_SYSCALL_PREFIX => nil, #optional
+          TRANSCODER_CPU_SYSCALL_PREFIX => nil, #optional
           SUPPORTED_ENCODERS => nil,
           SUPPORTED_DECODERS => nil,
           SUPPORTED_FILE_FORMATS => nil,
@@ -330,17 +329,17 @@ class Config
     return config_hash
   end  
   
-  def config_sanity_check
+  def config_sanity_check(config)
     
     #start with simple stuff
     raise ConfigError.new("Both CPU and GPU code are disabled") unless
-      @config[CPU_TRANSCODE_ENABLED] or @config[CPU_TRANSCODE_ENABLED]
+      config[CPU_TRANSCODE_ENABLED] or config[CPU_TRANSCODE_ENABLED]
     
     #resolve ffmpeg resources
     #if binary location is not defined
     
-    transcoder_binary_location = @config[TRANSCODER_BINARY_LOCATION]
-    transcoder_probe_binary_location = @config[TRANSCODER_PROBE_BINARY_LOCATION]
+    transcoder_binary_location = config[TRANSCODER_BINARY_LOCATION]
+    transcoder_probe_binary_location = config[TRANSCODER_PROBE_BINARY_LOCATION]
       
     #validate the location of the transcoder binary /opt/ffmpeg/bin/ffmpeg
     if(!transcoder_binary_location)
@@ -350,15 +349,15 @@ class Config
   
       if( bin_location && File.exists?(bin_location))
         #overwrite the directive with what whereis found if it's viable
-        @config[TRANSCODER_BINARY_LOCATION] = bin_location
+        config[TRANSCODER_BINARY_LOCATION] = bin_location
         MyLogger.instance.debug("Config", "Using ffmpeg at #{bin_location}")
       end
     end
     
     #validate the directive is set
     raise ConfigError.new("Cannot find FFmpeg binary") unless 
-      @config[TRANSCODER_BINARY_LOCATION] and 
-      File.exists?(@config[TRANSCODER_BINARY_LOCATION])
+      config[TRANSCODER_BINARY_LOCATION] and 
+      File.exists?(config[TRANSCODER_BINARY_LOCATION])
 
     #validate the location of the transcoder probe binary /opt/ffmpeg/bin/ffprobe
     if(!transcoder_probe_binary_location)
@@ -367,15 +366,15 @@ class Config
       bin_location = `whereis -b ffprobe`.split(/\s+/)[1]
 
       if( bin_location && File.exists?(bin_location))
-        @config[TRANSCODER_PROBE_BINARY_LOCATION] = bin_location
+        config[TRANSCODER_PROBE_BINARY_LOCATION] = bin_location
         MyLogger.instance.debug("Config", "Using ffprobe at #{bin_location}")
       end
     end
 
     #validate the directive is set
     raise ConfigError.new("Cannot find FFprobe binary") unless 
-          config[TRANSCODER_PROBE_BINARY_LOCATION] and 
-          File.exists?(config[TRANSCODER_PROBE_BINARY_LOCATION])
+      config[TRANSCODER_PROBE_BINARY_LOCATION] and 
+      File.exists?(config[TRANSCODER_PROBE_BINARY_LOCATION])
       
     #if gpu enabled and no hwaccel? -> see if possible
     #raise "No hwaccel specified" unless 
@@ -383,19 +382,19 @@ class Config
       
     #validate target directives are set
     raise FormatError.new("Target video format not specified") unless
-          config[TARGET_VIDEO_FORMAT]
+      config[TARGET_VIDEO_FORMAT]
       
     raise FormatError.new("Target audio format not specified") unless
-          config[TARGET_AUDIO_FORMAT]
+      config[TARGET_AUDIO_FORMAT]
       
     raise FormatError.new("Target pixel format not specified") unless
-          config[TARGET_PIXEL_FORMAT]
+      config[TARGET_PIXEL_FORMAT]
       
     raise FormatError.new("Target file format not specified") unless
-          config[TARGET_FILE_EXTENSION]
+      config[TARGET_FILE_EXTENSION]
       
     raise LangError.new("Target language not specified") unless
-          config[TARGET_LANG]
+      config[TARGET_LANG]
   end
   
   def system_sanity_check
@@ -601,10 +600,6 @@ class Config
     return @config[SUPPORTED_ENCODERS][SUPPORTED_ENCODERS_VIDEO][encoder]
   end
   
-  def get_use_gpu_for_transcode
-    return @use_gpu_for_transcode
-  end
-  
 ###############################
   
   def load_encoders(config)
@@ -635,18 +630,16 @@ class Config
     
     output.split("\n").each { |line| 
       line.strip!
-      
-      #V... h1337
-      (capability, encoder)  = line.split("\s")
+      fields = line.split("\s")
       
       #encoder line -> decide v/a/s and store
-      if(capability and encoder)
-        if(capability[0] == "V")
-          encoders[SUPPORTED_ENCODERS_VIDEO][encoder] = capability
-        elsif(capability[0] == "A")
-          encoders[SUPPORTED_ENCODERS_AUDIO][encoder] = capability
-        elsif(capability[0] == "S")
-          encoders[SUPPORTED_ENCODERS_SUBTITLE][encoder] = capability
+      if(fields[0] and fields[1])
+        if(fields[0][0] == "V")
+          encoders[SUPPORTED_ENCODERS_VIDEO][fields[1]] = fields[0]
+        elsif(fields[0][0] == "A")
+          encoders[SUPPORTED_ENCODERS_AUDIO][fields[1]] = fields[0]
+        elsif(fields[0][0] == "S")
+          encoders[SUPPORTED_ENCODERS_SUBTITLE][fields[1]] = fields[0]
         else
           MyLogger.instance.debug("Config", "Malformed encoder entry #{line}")
         end
@@ -696,23 +689,20 @@ class Config
       
     }
     
-    raise "Attempt to load decoders failed" unless output
+    raise "Attempt to load encoders failed" unless output
    
     output.split("\n").each { |line| 
       line.strip!
-      
-      #V... h1337
-      (capability, decoder) = line.split("\s")
+      fields = line.split("\s")
       
       #encoder line -> decide v/a/s and store
-      if(decoder and capability)
-        if(capability[0] == "V")
-          decoders[SUPPORTED_DECODERS_VIDEO][decoder] = capability
-          #puts "Video decoder #{ decoder }"
-        elsif( capability[0] == "A")
-          decoders[SUPPORTED_DECODERS_AUDIO][decoder] = capability
-        elsif( capability[0] == "S")
-          decoders[SUPPORTED_DECODERS_SUBTITLE][decoder] = capability
+      if(fields[0] and fields[1])
+        if(fields[0][0] == "V")
+          decoders[SUPPORTED_DECODERS_VIDEO][fields[1]] = fields[0]
+        elsif(fields[0][0] == "A")
+          decoders[SUPPORTED_DECODERS_AUDIO][fields[1]] = fields[0]
+        elsif(fields[0][0] == "S")
+          decoders[SUPPORTED_DECODERS_SUBTITLE][fields[1]] = fields[0]
         else
           MyLogger.instance.debug("Config", "Malformed decoder entry #{line}")
         end
@@ -732,26 +722,23 @@ class Config
       #      V..... vc1_cuvid            Nvidia CUVID VC1 decoder (codec vc1)
       #      V..... vp8_cuvid            Nvidia CUVID VP8 decoder (codec vp8)
       #      V..... vp9_cuvid            Nvidia CUVID VP9 decoder (codec vp9)
-#      NVIDIA_DECODERS.each{ |decoder| 
-#        puts "decoder: #{decoder}"
-#        raise ConfigError.new("Expected GPU decoder not found: #{decoder}") unless
-#            decoders[SUPPORTED_DECODERS_VIDEO][decoder]
-#      }
+      NVIDIA_DECODERS.each{ |decoder| 
+        raise ConfigError.new("Expected GPU decoder not found: #{decoder}") unless
+          @config[SUPPORTED_DECODERS][SUPPORTED_DECODERS_VIDEO][decoder]
+      }
     end
     
     video_decoders_loaded = decoders[SUPPORTED_DECODERS_VIDEO].length
     MyLogger.instance.debug("Config", "Loaded #{video_decoders_loaded} video decoders")
     raise "Could not load video decoders" unless video_decoders_loaded > 0
         
-    audio_decoders_loaded = decoders[SUPPORTED_DECODERS_AUDIO].length
-    MyLogger.instance.debug("Config", "Loaded #{audio_decoders_loaded} audio decoders")
-    raise "Could not load audio encoders" unless audio_decoders_loaded > 0
+    audio_encoders_loaded = decoders[SUPPORTED_DECODERS_AUDIO].length
+    MyLogger.instance.debug("Config", "Loaded #{audio_encoders_loaded} audio decoders")
+    raise "Could not load audio encoders" unless audio_encoders_loaded > 0
     
-    subtitle_decoders_loaded = decoders[SUPPORTED_DECODERS_SUBTITLE].length
-    MyLogger.instance.debug("Config", "Loaded #{subtitle_decoders_loaded} subtitle decoders")
-    raise "Could not load subtitle decoders" unless subtitle_decoders_loaded > 0
-    
-    return decoders
+    subtitle_encoders_loaded = decoders[SUPPORTED_DECODERS_SUBTITLE].length
+    MyLogger.instance.debug("Config", "Loaded #{subtitle_encoders_loaded} subtitle decoders")
+    raise "Could not load subtitle encoders" unless subtitle_encoders_loaded > 0
   end
   
   def load_file_formats(config)
@@ -945,17 +932,17 @@ class Config
       video_transcode_lib = VIDEO_TRANSCODE_ENCODERS_GPU[format] 
       
       raise FormatError.new("Cannot resolve transcode library from format #{format}") unless
-            video_transcode_lib
+        video_transcode_lib
 
-        @config[TARGET_VIDEO_GPU_TRANSCODE_ENCODER] = video_transcode_lib
-        MyLogger.instance.debug("Config", "Setting new target video encoder to #{video_transcode_lib}")
+      @config[TARGET_VIDEO_GPU_TRANSCODE_ENCODER] = video_transcode_lib
+      MyLogger.instance.debug("Config", "Setting new target video encoder to #{video_transcode_lib}")
 
       
     else
-         video_transcode_lib = VIDEO_TRANSCODE_ENCODERS_CPU[format] 
+      video_transcode_lib = VIDEO_TRANSCODE_ENCODERS_CPU[format] 
       
       raise FormatError.new("Cannot resolve transcode library from format #{format}") unless
-            video_transcode_lib
+        video_transcode_lib
 
       @config[TARGET_VIDEO_CPU_TRANSCODE_ENCODER] = video_transcode_lib
       MyLogger.instance.debug("Config", "Setting new target video encoder to #{video_transcode_lib}")
@@ -997,8 +984,8 @@ class Config
     @config[TARGET_LANG] = lang
   end
   
-  def use_gpu_for_transcode(use)
-    @use_gpu_for_transcode = use
+  def set_target_file_extension(extension)
+    
   end
 
   def dump_config

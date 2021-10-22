@@ -44,15 +44,37 @@ target = nil
 
 num_threads = 1
 
+######################
+#cli args
+
 #confdir defaults to ./conf
 
-#convert or info?
+#########
+#help - show capabilities of dlnaify/ffmpeg install
+help = (ARGV.index("-help") != nil) || (ARGV.index("-h") != nil) || (ARGV.index("--help") != nil)
+
+#print help info and exit
+#sample uses
+if(help)
+  
+  puts ("I'm helping!")
+  exit
+end
+#########
+#info - show capabilities of dlnaify/ffmpeg install
+#considers -cfg option
+info = ARGV.index("-info") != nil
+
+#########
+#convert or probe?
 convert = true if ARGV.index("-c") != nil
 
+#########
 #directory or single file?
 source_isdir = true if ARGV.index("-d") != nil
 
-#use multiple threads?
+#########
+#use multiple processes?
 if(convert)
 
   thread_flag = ARGV.index("-p")
@@ -63,11 +85,17 @@ if(convert)
     
 end
 
+##########
+#target 
+
 target_flag = ARGV.index("-t")
 
 if(target_flag != nil)
   target = ARGV[target_flag + 1]
 end
+
+##########
+#config file
 
 #enforce relative to binary
 #default at ./conf/
@@ -78,11 +106,89 @@ if(config_flag != nil)
   config_file = ARGV[config_flag + 1]
 end
 
+##########
+#cpu or gpu transcode
+#cpu is default
+
+gpu_transcode = ARGV.index("-gpu") != nil
+
+##########
+#gpu options
+
+gpu_use_devices = nil
+gpu_devices = nil
+
+if(gpu_transcode)
+  gpu_use_devices = ARGV.index("-gpu_dev") != nil
+  
+  #0,1,3 - comma-separated no spaces
+  #default is all devices
+  if(gpu_use_devices)
+    gpu_devices = ARGV[ARGV.index("-gpu_dev") + 1]
+  end
+end
+
+##########
+#video format override
+
+video_format_override = nil
+if(ARGV.index("-vf"))
+  video_format_override = ARGV[ARGV.index("-vf") + 1]
+end
+
+##########
+#audio format override
+
+audio_format_override = nil
+if(ARGV.index("-af"))
+  audio_format_override = ARGV[ARGV.index("-af") + 1]
+end
+
+##########
+#volume normalization
+
+vol_norm = nil
+if(ARGV.index("-vol"))
+  vol_norm = ARGV[ARGV.index("-vol") + 1]
+end
+
+#################################
 
 #TODO: switch to config factory
 config = Config.new(config_file)
 
 #set cli options
+
+if(info)
+  
+  puts(config.dump_config)
+  
+  exit
+end
+
+#format overrides ie h264 or hevc. it's up to the config to resolve codecs from formats
+config.set_target_video_format(video_format_override) if video_format_override
+config.set_target_audio_format(audio_format_override) if audio_format_override
+
+if(gpu_transcode)
+  
+  config.use_gpu_for_transcode(true)
+  
+  #devices
+  if(gpu_use_devices)
+    
+    #TODO: implement
+    #config.set_gpu_devices(gpu_devices.split(/\,/))
+  end
+  
+  #TODO: implement if we want to allow this from the cli
+  #hw accel?
+  #config.set_gpu_hw_accel(whatever)
+end
+
+#TODO: implement
+#volume normalization
+#config.set_volume_normalization(vol_norm) if vol_norm
 
 #build the converter here. we will still need it for probes
 #TODO: no we don't/shouldn't. config should be sufficent
@@ -146,11 +252,18 @@ else
 
     #add mimetype check
     
+    start_time = Time.now.to_f
+    
     Find.find(dir) { |file| 
       if(File.ftype(file) == "file" )         
         conv.add_file(file, target)
       end  
     }
+    
+    end_time = Time.now.to_f
+
+    MyLogger.instance.info("dlnaify", "Loading files took #{(end_time-start_time)} s")
+    
   else
     #get stream info for file
     file = ARGV[2]

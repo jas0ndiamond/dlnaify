@@ -6,7 +6,7 @@ require_relative "../exceptions/LangError.rb"
 require_relative "../exceptions/FormatError.rb"
 require_relative "../exceptions/ConfigError.rb"
 
-class Config
+class TranscodeConfig
 
   #directives
   GPU_TRANSCODE_ENABLED = "gpu_transcode_enabled"
@@ -330,17 +330,17 @@ class Config
     return config_hash
   end  
   
-  def config_sanity_check
+  def config_sanity_check(config)
     
     #start with simple stuff
     raise ConfigError.new("Both CPU and GPU code are disabled") unless
-      @config[CPU_TRANSCODE_ENABLED] or @config[CPU_TRANSCODE_ENABLED]
+      config[CPU_TRANSCODE_ENABLED] or config[CPU_TRANSCODE_ENABLED]
     
     #resolve ffmpeg resources
     #if binary location is not defined
     
-    transcoder_binary_location = @config[TRANSCODER_BINARY_LOCATION]
-    transcoder_probe_binary_location = @config[TRANSCODER_PROBE_BINARY_LOCATION]
+    transcoder_binary_location = config[TRANSCODER_BINARY_LOCATION]
+    transcoder_probe_binary_location = config[TRANSCODER_PROBE_BINARY_LOCATION]
       
     #validate the location of the transcoder binary /opt/ffmpeg/bin/ffmpeg
     if(!transcoder_binary_location)
@@ -350,15 +350,15 @@ class Config
   
       if( bin_location && File.exists?(bin_location))
         #overwrite the directive with what whereis found if it's viable
-        @config[TRANSCODER_BINARY_LOCATION] = bin_location
+        config[TRANSCODER_BINARY_LOCATION] = bin_location
         MyLogger.instance.debug("Config", "Using ffmpeg at #{bin_location}")
       end
     end
     
     #validate the directive is set
     raise ConfigError.new("Cannot find FFmpeg binary") unless 
-      @config[TRANSCODER_BINARY_LOCATION] and 
-      File.exists?(@config[TRANSCODER_BINARY_LOCATION])
+      config[TRANSCODER_BINARY_LOCATION] and 
+      File.exists?(config[TRANSCODER_BINARY_LOCATION])
 
     #validate the location of the transcoder probe binary /opt/ffmpeg/bin/ffprobe
     if(!transcoder_probe_binary_location)
@@ -367,7 +367,7 @@ class Config
       bin_location = `whereis -b ffprobe`.split(/\s+/)[1]
 
       if( bin_location && File.exists?(bin_location))
-        @config[TRANSCODER_PROBE_BINARY_LOCATION] = bin_location
+        config[TRANSCODER_PROBE_BINARY_LOCATION] = bin_location
         MyLogger.instance.debug("Config", "Using ffprobe at #{bin_location}")
       end
     end

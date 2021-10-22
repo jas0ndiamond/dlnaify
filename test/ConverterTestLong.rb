@@ -1,5 +1,5 @@
 require 'test/unit'
-require_relative "../../src/convert/Converter.rb"
+require_relative "../src/Converter.rb"
 
 #process and transcode our testfile
 #cleanup results
@@ -14,16 +14,13 @@ class ConverterTest < Test::Unit::TestCase
   #expected transcode results
   #syscalls don't return failures
   
-  #confirm that produced files are coherent
-  
   #sample source file in test/resources
-  #why test converting to many formats? because we can
+  #why test converting to many formats?
   #maybe have tests for conversion but run those based on supported output formats in config file 
     
   def setup
     puts "running setup ConverterTestLong"
 
-    #hardcoded ffmpeg calls
 #    ffmpeg -i resources/SampleVideo_640x360_10mb.mkv -c:v libx265 -c:a -f resources/SampleVideo_640x360_10mb_hevc.mkv 
 #    ffmpeg -i resources/SampleVideo_640x360_10mb.mkv -c:v libx265 -c:a copy -f resources/SampleVideo_640x360_10mb_hevc.mkv 
 #    ffmpeg -i resources/SampleVideo_640x360_10mb.mkv -c:v libx265 -c:a copy resources/SampleVideo_640x360_10mb_hevc.mkv 

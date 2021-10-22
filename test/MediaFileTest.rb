@@ -1,7 +1,7 @@
 require 'test/unit'
 require 'logger'
 
-require_relative "../../src/media/MediaFile.rb"
+require_relative "../src/MediaFile.rb"
 
 class MediaFileTest < Test::Unit::TestCase 
   
@@ -15,7 +15,7 @@ class MediaFileTest < Test::Unit::TestCase
     test_dir = File.expand_path(File.dirname(__FILE__))
     
     #setup tmpdir in resources
-    @tmp_dir = File.expand_path("#{test_dir}/../resources/tmp")
+    @tmp_dir = File.expand_path("#{test_dir}/resources/tmp")
     Dir.mkdir(@tmp_dir)
     raise RuntimeError.new("Couldn't create tmp dir #{@tmp_dir} for testing") unless 
       File.exists?(@tmp_dir)
@@ -99,17 +99,12 @@ class MediaFileTest < Test::Unit::TestCase
         raise RuntimeError.new("Could not create testfile") unless File.exists?(testfile)
 
         mediaFile = MediaFile.new( testfile, @tmp_dir )
+
+        #assert mediaFile.path.end_with?("/resources/testfile.mkv")
+        #assert mediaFile.dest == "/dev/null"
         
-        #check source path
+        #check source
         assert_true( File.exists?(mediaFile.path))
-                
-        #check source is viable in syscalls
-        escaped_path = mediaFile.get_safe_path
-        
-        #puts "escaped: #{escaped_path}"
-        
-        #ls of escaped_path will return the un-escaped path
-        assert_equal( testfile, `ls #{escaped_path}`.chomp)
         
         #check dest
         assert_equal( "#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path) 
@@ -190,14 +185,6 @@ class MediaFileTest < Test::Unit::TestCase
         
         #check source
         assert_true( File.exists?(mediaFile.path))
-          
-        #check source is viable in syscalls
-        escaped_path = mediaFile.get_safe_path
-        
-        #puts "escaped: #{escaped_path}"
-        
-        #ls of escaped_path will return the un-escaped path
-        assert_equal( testfile, `ls #{escaped_path}`.chomp)
         
         #check dest
         assert_equal( "#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
@@ -225,71 +212,9 @@ class MediaFileTest < Test::Unit::TestCase
         
         #check source
         assert_true( File.exists?(mediaFile.path))
-          
-        #check source is viable in syscalls
-        escaped_path = mediaFile.get_safe_path
-        
-        #puts "escaped: #{escaped_path}"
-        
-        #ls of escaped_path will return the un-escaped path
-        assert_equal( testfile, `ls #{escaped_path}`.chomp)
         
         #check dest
         assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
-        assert_equal(@tmp_dir, mediaFile.dest )
-
-      ensure
-        File.unlink(testfile) unless !File.exists?(testfile)
-        handle.close unless !handle
-      end
-    end
-  end
-  
-  def test_mp4_source_extension_change
-    assert_nothing_thrown do
-      testfile = "#{@tmp_dir}/testfile.mp4"
-      target_ext = "mkv"
-      
-      begin
-        handle = File.new(testfile, "w")
-
-        raise RuntimeError.new("Could not create testfile") unless File.exists?(testfile)
-
-        mediaFile = MediaFile.new( testfile, @tmp_dir )
-        mediaFile.set_target_file_extension(target_ext)
-        
-        #check source
-        assert_true( File.exists?(mediaFile.path))
-        
-        #check dest
-        assert_equal("#{@tmp_dir}/testfile." << target_ext, mediaFile.get_safe_dest_path )
-        assert_equal(@tmp_dir, mediaFile.dest )
-
-      ensure
-        File.unlink(testfile) unless !File.exists?(testfile)
-        handle.close unless !handle
-      end
-    end
-  end
-  
-  def test_no_extension
-    assert_nothing_thrown do
-      testfile = "#{@tmp_dir}/testfile_definitely_no_extension_here"
-      target_ext = "mkv"
-      
-      begin
-        handle = File.new(testfile, "w")
-
-        raise RuntimeError.new("Could not create testfile") unless File.exists?(testfile)
-
-        mediaFile = MediaFile.new( testfile, @tmp_dir )
-        mediaFile.set_target_file_extension(target_ext)
-        
-        #check source
-        assert_true( File.exists?(mediaFile.path))
-        
-        #check dest
-        assert_equal("#{@tmp_dir}/testfile_definitely_no_extension_here." << target_ext, mediaFile.get_safe_dest_path )
         assert_equal(@tmp_dir, mediaFile.dest )
 
       ensure
@@ -314,14 +239,6 @@ class MediaFileTest < Test::Unit::TestCase
         
         #check source
         assert_true( File.exists?(mediaFile.path))
-          
-        #check source is viable in syscalls
-        escaped_path = mediaFile.get_safe_path
-        
-        #puts "escaped: #{escaped_path}"
-        
-        #ls of escaped_path will return the un-escaped path
-        assert_equal( testfile, `ls #{escaped_path}`.chomp)
         
         #check dest
         assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
@@ -349,49 +266,6 @@ class MediaFileTest < Test::Unit::TestCase
         
         #check source
         assert_true( File.exists?(mediaFile.path))
-          
-        #check source is viable in syscalls
-        escaped_path = mediaFile.get_safe_path
-        
-        #puts "escaped: #{escaped_path}"
-        
-        #ls of escaped_path will return the un-escaped path
-        assert_equal( testfile, `ls #{escaped_path}`.chomp)
-        
-        #check dest
-        assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
-        assert_equal(@tmp_dir, mediaFile.dest )
-
-      ensure
-        File.unlink(testfile) unless !File.exists?(testfile)
-        handle.close unless !handle
-      end
-    end
-  end
-  
-  def test_source_with_apostrophes2
-    assert_nothing_thrown do
-      testfile = "#{@tmp_dir}/test''file.mkv"
-      
-      begin
-        handle = File.new(testfile, "w")
-
-        raise RuntimeError.new("Could not create testfile") unless File.exists?(testfile)
-
-        mediaFile = MediaFile.new( testfile, @tmp_dir )
-        #puts mediaFile.path
-        #puts mediaFile.dest
-        
-        #check source
-        assert_true( File.exists?(mediaFile.path))
-          
-        #check source is viable in syscalls
-        escaped_path = mediaFile.get_safe_path
-        
-        #puts "escaped: #{escaped_path}"
-        
-        #ls of escaped_path will return the un-escaped path
-        assert_equal( testfile, `ls #{escaped_path}`.chomp)
         
         #check dest
         assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
@@ -419,14 +293,6 @@ class MediaFileTest < Test::Unit::TestCase
         
         #check source
         assert_true( File.exists?(mediaFile.path))
-          
-        #check source is viable in syscalls
-        escaped_path = mediaFile.get_safe_path
-        
-        #puts "escaped: #{escaped_path}"
-        
-        #ls of escaped_path will return the un-escaped path
-        assert_equal( testfile, `ls #{escaped_path}`.chomp)
         
         #check dest
         assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
@@ -454,14 +320,6 @@ class MediaFileTest < Test::Unit::TestCase
         
         #check source
         assert_true( File.exists?(mediaFile.path))
-          
-        #check source is viable in syscalls
-        escaped_path = mediaFile.get_safe_path
-        
-        #puts "escaped: #{escaped_path}"
-        
-        #ls of escaped_path will return the un-escaped path
-        assert_equal( testfile, `ls #{escaped_path}`.chomp)
         
         #check dest
         assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
@@ -489,49 +347,6 @@ class MediaFileTest < Test::Unit::TestCase
         
         #check source
         assert_true( File.exists?(mediaFile.path))
-          
-        #check source is viable in syscalls
-        escaped_path = mediaFile.get_safe_path
-        
-        #puts "escaped: #{escaped_path}"
-        
-        #ls of escaped_path will return the un-escaped path
-        assert_equal( testfile, `ls #{escaped_path}`.chomp)
-        
-        #check dest
-        assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
-        assert_equal(@tmp_dir, mediaFile.dest )
-
-      ensure
-        File.unlink(testfile) unless !File.exists?(testfile)
-        handle.close unless !handle
-      end
-    end
-  end
-  
-  def test_source_with_angle_brax
-    assert_nothing_thrown do
-      testfile = "#{@tmp_dir}" + '/test<file>.mkv'
-      
-      begin
-        handle = File.new(testfile, "w")
-
-        raise RuntimeError.new("Could not create testfile") unless File.exists?(testfile)
-
-        mediaFile = MediaFile.new( testfile, @tmp_dir )
-        #puts mediaFile.path
-        #puts mediaFile.dest
-        
-        #check source
-        assert_true( File.exists?(mediaFile.path))
-          
-        #check source is viable in syscalls
-        escaped_path = mediaFile.get_safe_path
-        
-        #puts "escaped: #{escaped_path}"
-        
-        #ls of escaped_path will return the un-escaped path
-        assert_equal( testfile, `ls #{escaped_path}`.chomp)
         
         #check dest
         assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
@@ -559,14 +374,6 @@ class MediaFileTest < Test::Unit::TestCase
         
         #check source
         assert_true( File.exists?(mediaFile.path))
-          
-        #check source is viable in syscalls
-        escaped_path = mediaFile.get_safe_path
-        
-        #puts "escaped: #{escaped_path}"
-        
-        #ls of escaped_path will return the un-escaped path
-        assert_equal( testfile, `ls #{escaped_path}`.chomp)
         
         #check dest
         assert_equal("#{@tmp_dir}/testfile.mkv", mediaFile.get_safe_dest_path )
@@ -578,7 +385,7 @@ class MediaFileTest < Test::Unit::TestCase
       end
     end
   end
-    
+  
   def teardown
     #puts "teardown"
     #puts "Deleting tmpdir #{@tmp_dir}"

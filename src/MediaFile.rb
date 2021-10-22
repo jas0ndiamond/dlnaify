@@ -1,14 +1,11 @@
-require_relative '../log/MyLogger.rb'
-require_relative '../util/MyFileUtils.rb'
+require_relative 'MyLogger.rb'
 
 require 'open3'
-require 'json'
 
 class MediaFile
   
   attr_accessor :path
   attr_accessor :dest
-  attr_accessor :target_file_extension
   attr_accessor :transcoder_probe_info
   attr_accessor :converted_frame_count
   attr_accessor :framerate
@@ -18,7 +15,7 @@ class MediaFile
   
   #these are the streams currently existing in the file that will be chosen/set by MediaFileFactory
   #video will be the chosen video stream
-  #audio will be the chosen audio stream
+  #audio will be the chose audio stream
   attr_accessor :video_stream
   attr_accessor :audio_stream
   
@@ -33,7 +30,10 @@ class MediaFile
       File.exists?(path) and 
       File.readable?(path)
     
-    @path = File.realpath(path)
+    # @path needs to be escaped, since it's used in system calls later
+    #TODO: replace this with canonical path
+    #don't use safe path
+    @path = File.realpath(path) #File.path(path).gsub(/\"/, "\\\"" )
       
     MyLogger.instance.debug("MediaFile", "Received path #{@path}")
     
@@ -45,8 +45,6 @@ class MediaFile
       File.writable?( dest )
     
     #dest needs canonical path
-    #TODO: cleanup dest?
-      
     @dest = File.realpath(dest)
     
     MyLogger.instance.debug("MediaFile", "Received dest #{@dest}")
@@ -54,23 +52,11 @@ class MediaFile
     @video_stream = nil    
     @audio_stream = nil
     
-    @target_file_extension = nil
-    
-    #TODO: simple json validation of probe info
     @transcoder_probe_info = transcoder_probe_info
     
     update_converted_frame_count(0)
     update_framerate(0)
     set_status("QUEUED")
-  end
-  
-  def set_target_file_extension(extension)
-    
-    MyLogger.instance.debug("MediaFile", "Setting target file extension to #{extension}")
-    
-    Mutex.new.synchronize do
-      @target_file_extension = extension
-    end
   end
   
   def update_converted_frame_count(count)
@@ -168,16 +154,6 @@ class MediaFile
     end
   end
   
-  def get_safe_path
-    #path isn't safe, make it safe. it could be anything
-    
-    result = MyFileUtils.instance.escape_path(@path)
-    
-    MyLogger.instance.debug("MediaFile", "get_safe_path returning #{result}")
-    
-    return result
-  end
-  
   def get_safe_dest_path
     
     #safe dest for this file is determined by the @dest dir and 
@@ -189,7 +165,7 @@ class MediaFile
     
     #get and clean source filename
     target_filename = File.basename(@path).
-      gsub(/(,|;|'|`|"|<|>)/,"").
+      gsub(/(,|;|'|`|")/,"").
       gsub(/^\[[^\]]*\]/,""). 
       gsub(/^\([^\]]*\)/,""). 
       gsub(/^(_|\ )/, "").
@@ -208,24 +184,8 @@ class MediaFile
     #last step is remove preceding '.' do not want to create hidden files
     
     #puts "Found filename #{path}"
-      
-    if(@target_file_extension != nil)
-      
-      MyLogger.instance.info("MediaFile", "get_safe_dest_path using target file extension #{@target_file_extension}")
-
-      #many media files are 3-4 char extensions
-      #remove the current extension if it's there 
-      target_filename.gsub!(/\.....?$/, "")
-        
-      #append the target extension
-      target_filename = target_filename << "." << @target_file_extension
-
-    else
-      MyLogger.instance.info("MediaFile", "target file extension not specified, leaving unchanged")
-    end
 
     result = "#{target_dest}/#{target_filename}"
-    
     
     MyLogger.instance.debug("MediaFile", "get_safe_dest_path returning #{result}")
     

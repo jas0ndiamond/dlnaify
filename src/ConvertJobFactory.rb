@@ -1,6 +1,6 @@
-require_relative '../config/Config.rb'
-require_relative '../convert/ConvertJob.rb'
-require_relative '../log/MyLogger.rb'
+require_relative 'Config.rb'
+require_relative 'ConvertJob.rb'
+require_relative 'MyLogger.rb'
 
 #assemble system call from media file and config
 class ConvertJobFactory
@@ -8,7 +8,10 @@ class ConvertJobFactory
   attr_accessor :config
   
   def initialize(config)
-    @config = config    
+    @config = config
+    
+    #if cpu-transcode, probe cpu count
+    
   end
   
   def build_convert_job(media_file)
@@ -26,6 +29,8 @@ class ConvertJobFactory
     #determine gpu or cpu transcode
     #both -> gpu
     
+    #any env prefixes
+    #cuda ld_libary_path
     #taskset cpu affinity
     
     #ffmpeg binary
@@ -41,9 +46,7 @@ class ConvertJobFactory
     syscall.push("-hide_banner")
     syscall.push("-y")
     syscall.push("-i")
-    
-    #media_file.path is not safe 
-    syscall.push("'#{media_file.get_safe_path}'")
+    syscall.push("'#{media_file.path}'")
     
     target_video_format = @config.get_target_video_format
     target_audio_format = @config.get_target_audio_format
@@ -89,6 +92,7 @@ class ConvertJobFactory
     end
     
     #pixel format
+    #TODO: do we need to specify this? copy?
     #compare video stream pixfmt with target
     if(media_file.get_video_stream.pixel_format != @config.get_target_pixel_format)
       MyLogger.instance.info("ConvertJobFactory", "Changing pixel format to #{@config.get_target_pixel_format}")
@@ -137,9 +141,6 @@ class ConvertJobFactory
     syscall.push("0:#{audio_stream.identifier}")
     
     #volume normalization, if specified
-    #TODO: implement this. will probably go with ffmpeg's built-in 'normalize' with 2 passes.
-    #may have to rework this function to return multiple jobs
-    #may have to overwrite any -c:a copy directives. normalization precludes copy
     
     #output file at output dest
     syscall.push("'#{media_file.get_safe_dest_path}'")

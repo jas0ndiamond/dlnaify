@@ -1,5 +1,5 @@
-require_relative '../stream/VideoStream.rb'
-require_relative '../stream/AudioStream.rb'
+require_relative 'VideoStream.rb'
+require_relative 'AudioStream.rb'
 
 #Create MediaFiles with context provided by Config
 class MediaFileFactory
@@ -41,7 +41,7 @@ class MediaFileFactory
     
     #set_subtitle_format(media_file)
     
-    media_file.set_target_file_extension(@config.get_target_file_format)
+    #TODO: use config to set dest extension with target file extension
     
     end_time = Time.now.to_f
     
@@ -82,8 +82,6 @@ class MediaFileFactory
       output = stdout.read
     }
     
-    MyLogger.instance.debug("MediaFileFactory", "Transcoder probe completed")
-    
     return JSON.parse(output)
   end
   
@@ -111,9 +109,6 @@ class MediaFileFactory
          frame_count = stream["tags"]["NUMBER_OF_FRAMES"]
          MyLogger.instance.info("MediaFileFactory", "Using frame count from tags/NUMBER_OF_FRAMES: #{frame_count}")
        else
-         
-         #TODO: move this to the transcode job. log that this is happening
-         #maybe an undefined framecount forces the converterjobfactory to add an additional job
          
          #no obvious way of determining frame count. 
          #decode the file and count frames

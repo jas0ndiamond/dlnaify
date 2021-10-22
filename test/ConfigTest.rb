@@ -1,7 +1,9 @@
 require 'test/unit'
-require_relative "../../src/config/Config.rb"
+require_relative "../src/Config.rb"
 
 class ConfigTest < Test::Unit::TestCase 
+  
+  attr_accessor :instance
   
   def setup
     #puts "running setup ConfigTest"
@@ -10,7 +12,7 @@ class ConfigTest < Test::Unit::TestCase
     test_dir = File.expand_path(File.dirname(__FILE__))
     
     #setup tmpdir in resources
-    @conf_dir = File.expand_path("#{test_dir}/../resources/configs")
+    @conf_dir = File.expand_path("#{test_dir}/resources/configs")
     
   end
 
@@ -26,7 +28,7 @@ class ConfigTest < Test::Unit::TestCase
   end
   
   def test_nil_file
-    assert_nothing_thrown do
+    assert_raise ConfigError do
       Config.new(nil)
     end
   end
@@ -177,18 +179,6 @@ class ConfigTest < Test::Unit::TestCase
       c.set_target_lang("jpn")
     end
     
-  end
-  
-  def test_use_gpu_transcode
-    assert_nothing_thrown do
-      c = Config.new("#{@conf_dir}/dlnaify.good.conf")
-    
-      c.use_gpu_for_transcode(true)
-      
-      
-      assert_equal(true, c.get_use_gpu_for_transcode)
-      
-    end
   end
   
   def teardown
